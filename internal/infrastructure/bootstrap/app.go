@@ -27,6 +27,9 @@ import (
 	inventoryHttp "am-erp-go/internal/module/inventory/delivery/http"
 	inventoryRepo "am-erp-go/internal/module/inventory/repository"
 	inventoryUsecase "am-erp-go/internal/module/inventory/usecase"
+	shipmentHttp "am-erp-go/internal/module/shipment/delivery/http"
+	shipmentRepo "am-erp-go/internal/module/shipment/repository"
+	shipmentUsecase "am-erp-go/internal/module/shipment/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -94,20 +97,42 @@ func Build() (*App, error) {
 	quoteUsecase := supplierUsecase.NewQuoteUsecase(quoteRepository, productRepository, auditLogUsecase)
 	quoteHandler := supplierHttp.NewQuoteHandler(quoteUsecase)
 
+	warehouseRepository := inventoryRepo.NewWarehouseRepository(database)
+	warehouseUsecase := inventoryUsecase.NewWarehouseUsecase(warehouseRepository)
+	warehouseHandler := inventoryHttp.NewWarehouseHandler(warehouseUsecase)
+
+	balanceRepository := inventoryRepo.NewInventoryBalanceRepository(database)
+	inventoryMovementRepository := inventoryRepo.NewInventoryMovementRepository(database)
+	inventoryUsecaseObj := inventoryUsecase.NewInventoryUsecase(balanceRepository, inventoryMovementRepository)
+	inventoryHandler := inventoryHttp.NewInventoryHandler(inventoryUsecaseObj)
+
+	// 采购模块使用 InventoryUsecase 来正确创建库存流水并更新余额
 	purchaseOrderRepository := procurementRepo.NewPurchaseOrderRepository(database)
-	movementRepository := procurementRepo.NewMovementRepository(database)
 	purchaseOrderUsecase := procurementUsecase.NewPurchaseOrderUsecase(
 		purchaseOrderRepository,
 		productRepository,
 		comboRepository,
-		movementRepository,
+		inventoryUsecaseObj, // 使用 InventoryUsecase 而不是直接的 movementRepo
 		auditLogUsecase,
 	)
 	purchaseOrderHandler := procurementHttp.NewPurchaseOrderHandler(purchaseOrderUsecase)
 
-	warehouseRepository := inventoryRepo.NewWarehouseRepository(database)
-	warehouseUsecase := inventoryUsecase.NewWarehouseUsecase(warehouseRepository)
-	warehouseHandler := inventoryHttp.NewWarehouseHandler(warehouseUsecase)
+	// 发货模块
+	shipmentRepository := shipmentRepo.NewShipmentRepo(database)
+	shipmentItemRepository := shipmentRepo.NewShipmentItemRepo(database)
+	shipmentUsecaseObj := shipmentUsecase.NewShipmentUsecase(
+		shipmentRepository,
+		shipmentItemRepository,
+		inventoryUsecaseObj,   // 使用 InventoryUsecase 进行库存流转
+		productRepository,     // 用于加载产品信息
+		warehouseRepository,   // 用于加载仓库信息
+	)
+	shipmentHandler := shipmentHttp.NewShipmentHandler(shipmentUsecaseObj)
+
+	// 装箱规格
+	packageSpecRepository := shipmentRepo.NewPackageSpecRepository(database)
+	packageSpecUsecaseObj := shipmentUsecase.NewPackageSpecUseCase(packageSpecRepository)
+	packageSpecHandler := shipmentHttp.NewPackageSpecHandler(packageSpecUsecaseObj)
 
 	r := router.NewRouter(
 		jwtManager,
@@ -122,6 +147,9 @@ func Build() (*App, error) {
 		auditLogHandler,
 		uploadHandler,
 		warehouseHandler,
+		inventoryHandler,
+		shipmentHandler,
+		packageSpecHandler,
 	)
 	engine := r.Setup()
 

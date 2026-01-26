@@ -20,35 +20,45 @@ func (r *productRepository) List(params *domain.ProductListParams) ([]domain.Pro
 
 	query := r.db.Model(&domain.Product{})
 
+	// 仓库库存筛选（只返回有待出库存的产品，用于发货单选择）
+	if params.WarehouseID != nil {
+		query = query.Joins("INNER JOIN inventory_balance ON inventory_balance.sku_id = product.id AND inventory_balance.warehouse_id = ? AND inventory_balance.pending_shipment > 0", *params.WarehouseID)
+	}
+
 	// 关键词搜索
 	if params.Keyword != "" {
 		keyword := "%" + params.Keyword + "%"
-		query = query.Where("seller_sku LIKE ? OR asin LIKE ? OR title LIKE ?", keyword, keyword, keyword)
+		query = query.Where("product.seller_sku LIKE ? OR product.asin LIKE ? OR product.title LIKE ?", keyword, keyword, keyword)
 	}
 
 	// 站点筛选
 	if params.Marketplace != "" {
-		query = query.Where("marketplace = ?", params.Marketplace)
+		query = query.Where("product.marketplace = ?", params.Marketplace)
 	}
 
 	// 状态筛选
 	if params.Status != "" {
-		query = query.Where("status = ?", params.Status)
+		query = query.Where("product.status = ?", params.Status)
 	}
 
 	// 供应商筛选
 	if params.SupplierID != nil {
-		query = query.Where("supplier_id = ?", *params.SupplierID)
+		query = query.Where("product.supplier_id = ?", *params.SupplierID)
 	}
 
 	// 组合筛选
 	if params.ComboID != nil {
-		query = query.Where("combo_id = ?", *params.ComboID)
+		query = query.Where("product.combo_id = ?", *params.ComboID)
 	}
 
 	// 是否主产品
 	if params.IsComboMain != nil {
-		query = query.Where("is_combo_main = ?", *params.IsComboMain)
+		query = query.Where("product.is_combo_main = ?", *params.IsComboMain)
+	}
+
+	// 排除组合产品的子产品（用于发货单等场景）
+	if params.ExcludeComboChild {
+		query = query.Where("product.combo_id IS NOT NULL AND product.is_combo_main =0 ")
 	}
 
 	// 统计总数
@@ -58,7 +68,7 @@ func (r *productRepository) List(params *domain.ProductListParams) ([]domain.Pro
 
 	// 分页查询
 	offset := (params.Page - 1) * params.PageSize
-	if err := query.Order("gmt_modified DESC").
+	if err := query.Order("product.gmt_modified DESC").
 		Offset(offset).
 		Limit(params.PageSize).
 		Find(&products).Error; err != nil {

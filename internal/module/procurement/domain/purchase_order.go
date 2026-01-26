@@ -69,6 +69,11 @@ type PurchaseOrderReceiveParams struct {
 	OperatorID    *uint64
 }
 
+type PurchaseOrderShipParams struct {
+	WarehouseID uint64
+	OperatorID  *uint64
+}
+
 type SupplierSnapshot struct {
 	ID   uint64 `json:"id"`
 	Name string `json:"name"`

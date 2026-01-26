@@ -221,6 +221,11 @@ func (h *PurchaseOrderHandler) SubmitPurchaseOrder(c *gin.Context) {
 	})
 }
 
+type purchaseOrderShipRequest struct {
+	WarehouseID uint64  `json:"warehouse_id"`
+	OperatorID  *uint64 `json:"operator_id"`
+}
+
 // MarkPurchaseOrderShipped 标记发货
 func (h *PurchaseOrderHandler) MarkPurchaseOrderShipped(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -229,7 +234,18 @@ func (h *PurchaseOrderHandler) MarkPurchaseOrderShipped(c *gin.Context) {
 		return
 	}
 
-	if err := h.usecase.MarkShipped(c, id); err != nil {
+	var req purchaseOrderShipRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	params := domain.PurchaseOrderShipParams{
+		WarehouseID: req.WarehouseID,
+		OperatorID:  req.OperatorID,
+	}
+
+	if err := h.usecase.MarkShipped(c, id, params); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
 		return
 	}

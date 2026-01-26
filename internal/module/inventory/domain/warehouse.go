@@ -31,10 +31,44 @@ type Warehouse struct {
 	Remark        *string         `json:"remark" gorm:"column:remark;type:text"`
 	CreatedBy     *uint64         `json:"created_by" gorm:"column:created_by"`
 	UpdatedBy     *uint64         `json:"updated_by" gorm:"column:updated_by"`
-	GmtCreate     time.Time       `json:"gmt_create" gorm:"column:gmt_create"`
-	GmtModified   time.Time       `json:"gmt_modified" gorm:"column:gmt_modified"`
+	GmtCreate     time.Time       `json:"created_at" gorm:"column:gmt_create"`
+	GmtModified   time.Time       `json:"updated_at" gorm:"column:gmt_modified"`
 }
 
 func (Warehouse) TableName() string {
 	return "warehouse"
+}
+
+type WarehouseListParams struct {
+	Page     int
+	PageSize int
+	Type     *WarehouseType
+	Status   *WarehouseStatus
+	Keyword  *string
+}
+
+type CreateWarehouseParams struct {
+	Code          string          `json:"code" binding:"required"`
+	Name          string          `json:"name" binding:"required"`
+	Type          WarehouseType   `json:"type" binding:"required"`
+	Country       *string         `json:"country"`
+	Address       *string         `json:"address"`
+	ContactPerson *string         `json:"contact_person"`
+	ContactPhone  *string         `json:"contact_phone"`
+	ContactEmail  *string         `json:"contact_email"`
+	Status        WarehouseStatus `json:"status"`
+	Remark        *string         `json:"remark"`
+}
+
+type UpdateWarehouseParams struct {
+	Code          *string          `json:"code"`
+	Name          *string          `json:"name"`
+	Type          *WarehouseType   `json:"type"`
+	Country       *string          `json:"country"`
+	Address       *string          `json:"address"`
+	ContactPerson *string          `json:"contact_person"`
+	ContactPhone  *string          `json:"contact_phone"`
+	ContactEmail  *string          `json:"contact_email"`
+	Status        *WarehouseStatus `json:"status"`
+	Remark        *string          `json:"remark"`
 }

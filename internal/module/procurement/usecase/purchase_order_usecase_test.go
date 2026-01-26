@@ -1,8 +1,10 @@
 package usecase
 
 import (
+	"context"
 	"testing"
 
+	inventoryDomain "am-erp-go/internal/module/inventory/domain"
 	"am-erp-go/internal/module/procurement/domain"
 	productdomain "am-erp-go/internal/module/product/domain"
 )
@@ -73,15 +75,19 @@ func (s *stubComboProvider) GetItemsByComboID(comboID uint64) ([]productdomain.P
 	return s.items[comboID], nil
 }
 
-type stubMovementRepo struct {
-	created []domain.InventoryMovement
+type stubInventoryService struct {
+	created []*inventoryDomain.CreateMovementParams
 }
 
-func (s *stubMovementRepo) Create(movement *domain.InventoryMovement) error {
-	if movement != nil {
-		s.created = append(s.created, *movement)
+func (s *stubInventoryService) CreateMovement(ctx context.Context, params *inventoryDomain.CreateMovementParams) (*inventoryDomain.InventoryMovement, error) {
+	if params != nil {
+		s.created = append(s.created, params)
 	}
-	return nil
+	return &inventoryDomain.InventoryMovement{
+		ID:       1,
+		SkuID:    params.SkuID,
+		Quantity: params.Quantity,
+	}, nil
 }
 
 func floatPtr(v float64) *float64 {
@@ -188,6 +194,7 @@ func TestCreatePurchaseOrderExpandsComboItems(t *testing.T) {
 func TestReceivePurchaseOrderUpdatesQtyAndCreatesMovements(t *testing.T) {
 	order := &domain.PurchaseOrder{
 		ID:       5,
+		PoNumber: "PO-TEST-001",
 		Status:   domain.PurchaseOrderStatusShipped,
 		Currency: "USD",
 		Items: []domain.PurchaseOrderItem{
@@ -197,8 +204,8 @@ func TestReceivePurchaseOrderUpdatesQtyAndCreatesMovements(t *testing.T) {
 	}
 
 	poRepo := &stubPurchaseOrderRepo{getItem: order}
-	movementRepo := &stubMovementRepo{}
-	uc := NewPurchaseOrderUsecase(poRepo, nil, nil, movementRepo, nil)
+	inventoryService := &stubInventoryService{}
+	uc := NewPurchaseOrderUsecase(poRepo, nil, nil, inventoryService, nil)
 
 	err := uc.Receive(nil, 5, domain.PurchaseOrderReceiveParams{
 		WarehouseID:   7,
@@ -220,11 +227,11 @@ func TestReceivePurchaseOrderUpdatesQtyAndCreatesMovements(t *testing.T) {
 		t.Fatalf("expected status to remain SHIPPED")
 	}
 
-	if len(movementRepo.created) != 1 {
-		t.Fatalf("expected 1 movement created, got %d", len(movementRepo.created))
+	if len(inventoryService.created) != 1 {
+		t.Fatalf("expected 1 movement created, got %d", len(inventoryService.created))
 	}
 
-	movement := movementRepo.created[0]
+	movement := inventoryService.created[0]
 	if movement.SkuID != 200 || movement.Quantity != 3 || movement.WarehouseID != 7 {
 		t.Fatalf("unexpected movement: %+v", movement)
 	}

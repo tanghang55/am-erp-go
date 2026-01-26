@@ -1,13 +1,16 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
+	mathrand "math/rand"
 	"sort"
 	"time"
 
 	"am-erp-go/internal/module/procurement/domain"
+	inventoryDomain "am-erp-go/internal/module/inventory/domain"
 	productdomain "am-erp-go/internal/module/product/domain"
 	systemUsecase "am-erp-go/internal/module/system/usecase"
 
@@ -37,8 +40,8 @@ type ComboProvider interface {
 	GetItemsByComboID(comboID uint64) ([]productdomain.ProductComboItem, error)
 }
 
-type InventoryMovementRepository interface {
-	Create(movement *domain.InventoryMovement) error
+type InventoryService interface {
+	CreateMovement(ctx context.Context, params *inventoryDomain.CreateMovementParams) (*inventoryDomain.InventoryMovement, error)
 }
 
 type AuditLogger interface {
@@ -46,26 +49,26 @@ type AuditLogger interface {
 }
 
 type PurchaseOrderUsecase struct {
-	repo          PurchaseOrderRepository
-	productLookup ProductLookup
-	comboProvider ComboProvider
-	movementRepo  InventoryMovementRepository
-	auditLogger   AuditLogger
+	repo             PurchaseOrderRepository
+	productLookup    ProductLookup
+	comboProvider    ComboProvider
+	inventoryService InventoryService
+	auditLogger      AuditLogger
 }
 
 func NewPurchaseOrderUsecase(
 	repo PurchaseOrderRepository,
 	productLookup ProductLookup,
 	comboProvider ComboProvider,
-	movementRepo InventoryMovementRepository,
+	inventoryService InventoryService,
 	auditLogger AuditLogger,
 ) *PurchaseOrderUsecase {
 	return &PurchaseOrderUsecase{
-		repo:          repo,
-		productLookup: productLookup,
-		comboProvider: comboProvider,
-		movementRepo:  movementRepo,
-		auditLogger:   auditLogger,
+		repo:             repo,
+		productLookup:    productLookup,
+		comboProvider:    comboProvider,
+		inventoryService: inventoryService,
+		auditLogger:      auditLogger,
 	}
 }
 
@@ -117,6 +120,7 @@ func (uc *PurchaseOrderUsecase) Receive(c *gin.Context, orderID uint64, params d
 
 	now := time.Now()
 	allReceived := true
+	ctx := context.Background()
 
 	for i := range order.Items {
 		item := &order.Items[i]
@@ -127,34 +131,27 @@ func (uc *PurchaseOrderUsecase) Receive(c *gin.Context, orderID uint64, params d
 			}
 			item.QtyReceived += delta
 
-			if uc.movementRepo != nil {
-				totalCost := item.UnitCost * float64(delta)
-				beforeAvailable := uint64(0)
-				afterAvailable := beforeAvailable + delta
-				movement := &domain.InventoryMovement{
-					TraceID:         getTraceID(c),
+			// 仓库收货：从"采购在途"转到"待检"
+			// 注意：发货时(MarkShipped)已经增加了"采购在途"库存
+			if uc.inventoryService != nil {
+				unitCost := item.UnitCost
+				remark := fmt.Sprintf("仓库收货入待检: %s", order.PoNumber)
+
+				warehouseReceiveParams := &inventoryDomain.CreateMovementParams{
 					SkuID:           item.SkuID,
 					WarehouseID:     params.WarehouseID,
-					MovementType:    "PURCHASE_RECEIPT",
-					ReferenceType:   "PURCHASE_ORDER",
+					MovementType:    inventoryDomain.MovementTypeWarehouseReceive,
+					Quantity:        int(delta),
+					ReferenceType:   stringPtr("PURCHASE_ORDER"),
 					ReferenceID:     &orderID,
-					ReferenceNumber: order.PoNumber,
-					Quantity:        int64(delta),
-					BeforeAvailable: beforeAvailable,
-					AfterAvailable:  afterAvailable,
-					BeforeReserved:  0,
-					AfterReserved:   0,
-					BeforeDamaged:   0,
-					AfterDamaged:    0,
-					UnitCost:        item.UnitCost,
-					TotalCost:       roundAmount(totalCost),
-					OperatedAt:      now,
+					ReferenceNumber: &order.PoNumber,
+					UnitCost:        &unitCost,
+					Remark:          &remark,
+					OperatorID:      params.OperatorID,
+					OperatedAt:      &now,
 				}
-				if params.OperatorID != nil {
-					movement.OperatorID = params.OperatorID
-				}
-				if err := uc.movementRepo.Create(movement); err != nil {
-					return err
+				if _, err := uc.inventoryService.CreateMovement(ctx, warehouseReceiveParams); err != nil {
+					return fmt.Errorf("failed to create warehouse receive movement: %w", err)
 				}
 			}
 		}
@@ -175,6 +172,10 @@ func (uc *PurchaseOrderUsecase) Receive(c *gin.Context, orderID uint64, params d
 
 	uc.recordAudit(c, "RECEIVE", "PurchaseOrder", fmt.Sprintf("%d", orderID), nil, order)
 	return nil
+}
+
+func stringPtr(s string) *string {
+	return &s
 }
 
 func (uc *PurchaseOrderUsecase) List(params *domain.PurchaseOrderListParams) ([]domain.PurchaseOrder, int64, error) {
@@ -273,7 +274,7 @@ func (uc *PurchaseOrderUsecase) Submit(c *gin.Context, orderID uint64) error {
 	return nil
 }
 
-func (uc *PurchaseOrderUsecase) MarkShipped(c *gin.Context, orderID uint64) error {
+func (uc *PurchaseOrderUsecase) MarkShipped(c *gin.Context, orderID uint64, params domain.PurchaseOrderShipParams) error {
 	order, err := uc.repo.GetByID(orderID)
 	if err != nil {
 		return err
@@ -281,7 +282,36 @@ func (uc *PurchaseOrderUsecase) MarkShipped(c *gin.Context, orderID uint64) erro
 	if order.Status != domain.PurchaseOrderStatusOrdered {
 		return errors.New("order status invalid for ship")
 	}
+
 	now := time.Now()
+	ctx := context.Background()
+
+	// 供应商发货 → 货物进入"采购在途"状态
+	if uc.inventoryService != nil && params.WarehouseID != 0 {
+		for _, item := range order.Items {
+			if item.QtyOrdered == 0 {
+				continue
+			}
+			unitCost := item.UnitCost
+			purchaseShipParams := &inventoryDomain.CreateMovementParams{
+				SkuID:           item.SkuID,
+				WarehouseID:     params.WarehouseID,
+				MovementType:    inventoryDomain.MovementTypePurchaseShip,
+				Quantity:        int(item.QtyOrdered),
+				ReferenceType:   stringPtr("PURCHASE_ORDER"),
+				ReferenceID:     &orderID,
+				ReferenceNumber: &order.PoNumber,
+				UnitCost:        &unitCost,
+				Remark:          stringPtr(fmt.Sprintf("采购发货入在途: %s", order.PoNumber)),
+				OperatorID:      params.OperatorID,
+				OperatedAt:      &now,
+			}
+			if _, err := uc.inventoryService.CreateMovement(ctx, purchaseShipParams); err != nil {
+				return fmt.Errorf("failed to create purchase ship movement: %w", err)
+			}
+		}
+	}
+
 	order.Status = domain.PurchaseOrderStatusShipped
 	order.ShippedAt = &now
 	order.Items = nil
@@ -462,7 +492,11 @@ func ensurePoNumber(poNumber string) string {
 		return poNumber
 	}
 	now := time.Now()
-	return fmt.Sprintf("PO%s%04d", now.Format("20060102150405"), now.Nanosecond()%10000)
+	// PO + 年月日时分秒 + 毫秒(3位) + 随机数(2位)
+	// 例如：PO2026012314140012345
+	ms := now.Nanosecond() / 1000000 // 毫秒 0-999
+	rnd := mathrand.Intn(100)        // 随机数 0-99
+	return fmt.Sprintf("PO%s%03d%02d", now.Format("20060102150405"), ms, rnd)
 }
 
 func uniqueSkuIDs(items []domain.PurchaseOrderItem) []uint64 {
@@ -490,13 +524,6 @@ func getUnitCost(product productdomain.Product) float64 {
 
 func roundAmount(v float64) float64 {
 	return math.Round(v*10000) / 10000
-}
-
-func getTraceID(c *gin.Context) string {
-	if c == nil {
-		return ""
-	}
-	return c.GetHeader("X-Trace-Id")
 }
 
 func (uc *PurchaseOrderUsecase) recordAudit(c *gin.Context, action, entityType, entityID string, before, after any) {

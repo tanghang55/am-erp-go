@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"am-erp-go/internal/infrastructure/auth"
+	"am-erp-go/internal/infrastructure/middleware"
 	"am-erp-go/internal/infrastructure/upload"
 	identityHttp "am-erp-go/internal/module/identity/delivery/http"
 	menuHttp "am-erp-go/internal/module/menu/delivery/http"
@@ -14,6 +15,7 @@ import (
 	supplierHttp "am-erp-go/internal/module/supplier/delivery/http"
 	systemHttp "am-erp-go/internal/module/system/delivery/http"
 	inventoryHttp "am-erp-go/internal/module/inventory/delivery/http"
+	shipmentHttp "am-erp-go/internal/module/shipment/delivery/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,6 +34,9 @@ type Router struct {
 	auditLogHandler      *systemHttp.AuditLogHandler
 	uploadHandler        *upload.UploadHandler
 	warehouseHandler     *inventoryHttp.WarehouseHandler
+	inventoryHandler     *inventoryHttp.InventoryHandler
+	shipmentHandler      *shipmentHttp.ShipmentHandler
+	packageSpecHandler   *shipmentHttp.PackageSpecHandler
 }
 
 func NewRouter(
@@ -47,9 +52,18 @@ func NewRouter(
 	auditLogHandler *systemHttp.AuditLogHandler,
 	uploadHandler *upload.UploadHandler,
 	warehouseHandler *inventoryHttp.WarehouseHandler,
+	inventoryHandler *inventoryHttp.InventoryHandler,
+	shipmentHandler *shipmentHttp.ShipmentHandler,
+	packageSpecHandler *shipmentHttp.PackageSpecHandler,
 ) *Router {
+	// 使用 gin.New() 而不是 gin.Default()，手动配置中间件
+	engine := gin.New()
+	engine.Use(gin.Logger())           // 日志中间件
+	engine.Use(middleware.Recovery())  // 自定义恢复中间件（统一错误响应）
+	engine.Use(middleware.ErrorHandler()) // 错误处理中间件
+
 	return &Router{
-		engine:               gin.Default(),
+		engine:               engine,
 		jwtManager:           jwtManager,
 		authHandler:          authHandler,
 		menuHandler:          menuHandler,
@@ -62,6 +76,9 @@ func NewRouter(
 		auditLogHandler:      auditLogHandler,
 		uploadHandler:        uploadHandler,
 		warehouseHandler:     warehouseHandler,
+		inventoryHandler:     inventoryHandler,
+		shipmentHandler:      shipmentHandler,
+		packageSpecHandler:   packageSpecHandler,
 	}
 }
 
@@ -195,10 +212,59 @@ func (r *Router) Setup() *gin.Engine {
 
 			registerProcurementRoutes(protected, r.purchaseOrderHandler)
 
+			// Shipment routes
+			shipments := protected.Group("/shipments")
+			{
+				shipments.GET("", r.shipmentHandler.ListShipments)
+				shipments.GET("/:id", r.shipmentHandler.GetShipment)
+				shipments.POST("", r.shipmentHandler.CreateShipment)
+				shipments.POST("/:id/confirm", r.shipmentHandler.ConfirmShipment)     // DRAFT → CONFIRMED
+				shipments.POST("/:id/pack", r.shipmentHandler.PackShipment)           // CONFIRMED → PACKED
+				shipments.POST("/:id/ship", r.shipmentHandler.MarkShipmentShipped)    // PACKED → SHIPPED
+				shipments.POST("/:id/delivered", r.shipmentHandler.MarkShipmentDelivered) // SHIPPED → DELIVERED
+				shipments.POST("/:id/cancel", r.shipmentHandler.CancelShipment)       // Cancel with rollback
+				shipments.DELETE("/:id", r.shipmentHandler.DeleteShipment)            // Delete DRAFT or CANCELLED
+			}
+
+			// Package Spec routes (装箱规格)
+			r.packageSpecHandler.RegisterRoutes(protected)
+
 			// Inventory routes
 			inventory := protected.Group("/inventory")
 			{
+				// Warehouses - 完整的CRUD接口
+				inventory.GET("/warehouses", r.warehouseHandler.ListWarehouses)
 				inventory.GET("/warehouses/active", r.warehouseHandler.GetActiveWarehouses)
+				inventory.GET("/warehouses/:id", r.warehouseHandler.GetWarehouse)
+				inventory.POST("/warehouses", r.warehouseHandler.CreateWarehouse)
+				inventory.PUT("/warehouses/:id", r.warehouseHandler.UpdateWarehouse)
+				inventory.DELETE("/warehouses/:id", r.warehouseHandler.DeleteWarehouse)
+
+				// Balances
+				inventory.GET("/balances", r.inventoryHandler.ListBalances)
+				inventory.GET("/balances/sku/:sku_id/warehouse/:warehouse_id", r.inventoryHandler.GetSkuBalance)
+
+				// Movements
+				inventory.GET("/movements", r.inventoryHandler.ListMovements)
+				inventory.GET("/movements/:id", r.inventoryHandler.GetMovement)
+				inventory.POST("/movements/purchase-receipt", r.inventoryHandler.CreatePurchaseReceipt)
+				inventory.POST("/movements/sales-shipment", r.inventoryHandler.CreateSalesShipment)
+				inventory.POST("/movements/stock-take", r.inventoryHandler.CreateStockTakeAdjustment)
+				inventory.POST("/movements/manual-adjustment", r.inventoryHandler.CreateManualAdjustment)
+				inventory.POST("/movements/damage-write-off", r.inventoryHandler.CreateDamageWriteOff)
+				inventory.POST("/movements/return-receipt", r.inventoryHandler.CreateReturnReceipt)
+				inventory.POST("/movements/transfer", r.inventoryHandler.CreateTransfer)
+
+				// 库存状态流转
+				inventory.POST("/movements/purchase-ship", r.inventoryHandler.CreatePurchaseShip)           // 供应商发货
+				inventory.POST("/movements/warehouse-receive", r.inventoryHandler.CreateWarehouseReceive)   // 到仓收货
+				inventory.POST("/movements/inspection-pass", r.inventoryHandler.CreateInspectionPass)       // 质检通过
+				inventory.POST("/movements/inspection-fail", r.inventoryHandler.CreateInspectionFail)       // 质检不合格
+				inventory.POST("/movements/assembly-complete", r.inventoryHandler.CreateAssemblyComplete)   // 组装完成
+				inventory.POST("/movements/logistics-ship", r.inventoryHandler.CreateLogisticsShip)         // 物流发货
+				inventory.POST("/movements/platform-receive", r.inventoryHandler.CreatePlatformReceive)     // 平台上架
+				inventory.POST("/movements/return-receive", r.inventoryHandler.CreateReturnReceive)         // 退货入库
+				inventory.POST("/movements/return-inspect", r.inventoryHandler.CreateReturnInspect)         // 退货质检
 			}
 		}
 	}

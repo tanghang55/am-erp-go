@@ -24,7 +24,7 @@ func TestRouterServesUploads(t *testing.T) {
 	}
 
 	jwtManager := auth.NewJWTManager("test", 1)
-	r := NewRouter(jwtManager, nil, nil, nil, nil, nil, nil, nil, nil, nil, upload.NewUploadHandler())
+	r := NewRouter(jwtManager, nil, nil, nil, nil, nil, nil, nil, nil, nil, upload.NewUploadHandler(), nil, nil)
 	engine := r.Setup()
 
 	w := httptest.NewRecorder()

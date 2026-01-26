@@ -17,14 +17,16 @@ type ProductRepository interface {
 
 // ProductListParams 产品列表查询参数
 type ProductListParams struct {
-	Page        int
-	PageSize    int
-	Keyword     string
-	Marketplace string
-	Status      string
-	SupplierID  *uint64
-	ComboID     *uint64
-	IsComboMain *uint8
+	Page              int
+	PageSize          int
+	Keyword           string
+	Marketplace       string
+	Status            string
+	SupplierID        *uint64
+	ComboID           *uint64
+	IsComboMain       *uint8
+	ExcludeComboChild bool    // 排除组合产品的子产品（只返回combo_id IS NULL的SKU，用于发货单选择）
+	WarehouseID       *uint64 // 仓库ID，如果指定则只返回该仓库有库存的产品
 }
 
 // ProductParentRepository 产品父体仓储接口

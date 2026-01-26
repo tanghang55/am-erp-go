@@ -32,16 +32,24 @@ func NewProductHandler(productUsecase *usecase.ProductUsecase, imageUsecase Prod
 // ListProducts 获取产品列表
 func (h *ProductHandler) ListProducts(c *gin.Context) {
 	params := &domain.ProductListParams{
-		Page:        parseIntOrDefault(c.Query("page"), 1),
-		PageSize:    parseIntOrDefault(c.Query("page_size"), 20),
-		Keyword:     c.Query("keyword"),
-		Marketplace: c.Query("marketplace"),
-		Status:      c.Query("status"),
+		Page:              parseIntOrDefault(c.Query("page"), 1),
+		PageSize:          parseIntOrDefault(c.Query("page_size"), 20),
+		Keyword:           c.Query("keyword"),
+		Marketplace:       c.Query("marketplace"),
+		Status:            c.Query("status"),
+		ExcludeComboChild: c.Query("exclude_combo_child") == "true",
 	}
 
 	if supplierID := c.Query("supplier_id"); supplierID != "" {
 		if id, err := strconv.ParseUint(supplierID, 10, 64); err == nil {
 			params.SupplierID = &id
+		}
+	}
+
+	// 仓库ID筛选（只返回该仓库有库存的产品）
+	if warehouseID := c.Query("warehouse_id"); warehouseID != "" {
+		if id, err := strconv.ParseUint(warehouseID, 10, 64); err == nil {
+			params.WarehouseID = &id
 		}
 	}
 

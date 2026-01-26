@@ -1,0 +1,72 @@
+package domain
+
+import "time"
+
+// PackageSpec 装箱规格
+type PackageSpec struct {
+	ID             uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name           string    `json:"name" gorm:"column:name;size:100;not null"`              // 名称
+	Length         float64   `json:"length" gorm:"column:length;type:decimal(10,2)"`         // 长(cm)
+	Width          float64   `json:"width" gorm:"column:width;type:decimal(10,2)"`           // 宽(cm)
+	Height         float64   `json:"height" gorm:"column:height;type:decimal(10,2)"`         // 高(cm)
+	Weight         float64   `json:"weight" gorm:"column:weight;type:decimal(10,2)"`         // 重量(kg)
+	QuantityPerBox uint      `json:"quantity_per_box" gorm:"column:quantity_per_box;default:1"` // 每箱数量
+	Remark         *string   `json:"remark" gorm:"column:remark;size:500"`                   // 备注
+	Status         string    `json:"status" gorm:"column:status;size:20;default:'ACTIVE'"`   // 状态
+	CreatedBy   *uint64   `json:"created_by" gorm:"column:created_by"`
+	UpdatedBy   *uint64   `json:"updated_by" gorm:"column:updated_by"`
+	GmtCreate   time.Time `json:"created_at" gorm:"column:gmt_create;autoCreateTime"`
+	GmtModified time.Time `json:"updated_at" gorm:"column:gmt_modified;autoUpdateTime"`
+}
+
+func (PackageSpec) TableName() string {
+	return "package_spec"
+}
+
+// Volume 计算体积 (立方米)
+func (p *PackageSpec) Volume() float64 {
+	return (p.Length * p.Width * p.Height) / 1000000 // cm³ -> m³
+}
+
+// PackageSpecListParams 列表查询参数
+type PackageSpecListParams struct {
+	Page     int
+	PageSize int
+	Keyword  *string
+	Status   *string
+}
+
+// CreatePackageSpecParams 创建参数
+type CreatePackageSpecParams struct {
+	Name           string
+	Length         float64
+	Width          float64
+	Height         float64
+	Weight         float64
+	QuantityPerBox uint
+	Remark         *string
+	CreatedBy      *uint64
+}
+
+// UpdatePackageSpecParams 更新参数
+type UpdatePackageSpecParams struct {
+	Name           *string
+	Length         *float64
+	Width          *float64
+	Height         *float64
+	Weight         *float64
+	QuantityPerBox *uint
+	Remark         *string
+	Status         *string
+	UpdatedBy      *uint64
+}
+
+// PackageSpecRepository 仓储接口
+type PackageSpecRepository interface {
+	Create(spec *PackageSpec) error
+	Update(spec *PackageSpec) error
+	GetByID(id uint64) (*PackageSpec, error)
+	List(params *PackageSpecListParams) ([]*PackageSpec, int64, error)
+	Delete(id uint64) error
+	ListByIDs(ids []uint64) ([]*PackageSpec, error)
+}
