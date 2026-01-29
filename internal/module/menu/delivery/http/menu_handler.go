@@ -1,10 +1,10 @@
 package http
 
 import (
-	"net/http"
 	"strconv"
 
 	"am-erp-go/internal/infrastructure/auth"
+	"am-erp-go/internal/infrastructure/response"
 	menudomain "am-erp-go/internal/module/menu/domain"
 
 	"github.com/gin-gonic/gin"
@@ -30,27 +30,17 @@ func NewMenuHandler(menuUsecase MenuUsecase) *MenuHandler {
 func (h *MenuHandler) GetMenuTree(c *gin.Context) {
 	userID, exists := c.Get(auth.UserIDKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"code":    401,
-			"message": "User not authenticated",
-		})
+		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	menus, err := h.menuUsecase.GetMenuTree(userID.(uint64))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": "Failed to get menu tree",
-		})
+		response.InternalError(c, "Failed to get menu tree")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    menus,
-	})
+	response.Success(c, menus)
 }
 
 func (h *MenuHandler) ListMenus(c *gin.Context) {
@@ -76,64 +66,54 @@ func (h *MenuHandler) ListMenus(c *gin.Context) {
 
 	items, total, err := h.menuUsecase.ListMenus(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": err.Error(),
-		})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  items,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, items, total, params.Page, params.PageSize)
 }
 
 func (h *MenuHandler) CreateMenu(c *gin.Context) {
 	var menu menudomain.Menu
 	if err := c.ShouldBindJSON(&menu); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	if err := h.menuUsecase.CreateMenu(&menu); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": menu})
+	response.Success(c, menu)
 }
 
 func (h *MenuHandler) UpdateMenu(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var menu menudomain.Menu
 	if err := c.ShouldBindJSON(&menu); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	menu.ID = id
 	if err := h.menuUsecase.UpdateMenu(&menu); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": menu})
+	response.Success(c, menu)
 }
 
 func (h *MenuHandler) UpdateMenuStatus(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
@@ -141,31 +121,31 @@ func (h *MenuHandler) UpdateMenuStatus(c *gin.Context) {
 		Status string `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Status == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid status"})
+		response.BadRequest(c, "invalid status")
 		return
 	}
 
 	if err := h.menuUsecase.UpdateMenuStatus(id, req.Status); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }
 
 func (h *MenuHandler) DeleteMenu(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.menuUsecase.DeleteMenu(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }
 
 func parseIntOrDefault(s string, defaultVal int) int {

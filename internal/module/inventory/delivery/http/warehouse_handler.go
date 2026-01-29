@@ -1,9 +1,9 @@
 package http
 
 import (
-	"net/http"
 	"strconv"
 
+	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/inventory/domain"
 	"am-erp-go/internal/module/inventory/usecase"
 
@@ -44,119 +44,93 @@ func (h *WarehouseHandler) ListWarehouses(c *gin.Context) {
 
 	warehouses, total, err := h.usecase.ListWarehouses(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  warehouses,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, warehouses, total, page, pageSize)
 }
 
 // GetWarehouse 获取仓库详情
 func (h *WarehouseHandler) GetWarehouse(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	warehouse, err := h.usecase.GetWarehouse(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "warehouse not found"})
+		response.NotFound(c, "warehouse not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    warehouse,
-	})
+	response.Success(c, warehouse)
 }
 
 // CreateWarehouse 创建仓库
 func (h *WarehouseHandler) CreateWarehouse(c *gin.Context) {
 	var req domain.CreateWarehouseParams
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	warehouse, err := h.usecase.CreateWarehouse(c, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    warehouse,
-	})
+	response.Success(c, warehouse)
 }
 
 // UpdateWarehouse 更新仓库
 func (h *WarehouseHandler) UpdateWarehouse(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req domain.UpdateWarehouseParams
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	warehouse, err := h.usecase.UpdateWarehouse(c, id, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    warehouse,
-	})
+	response.Success(c, warehouse)
 }
 
 // DeleteWarehouse 删除仓库
 func (h *WarehouseHandler) DeleteWarehouse(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.usecase.DeleteWarehouse(c, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 // GetActiveWarehouses 获取所有启用的仓库
 func (h *WarehouseHandler) GetActiveWarehouses(c *gin.Context) {
 	warehouses, err := h.usecase.GetActiveWarehouses()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    warehouses,
-	})
+	response.Success(c, warehouses)
 }

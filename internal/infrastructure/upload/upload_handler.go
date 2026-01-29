@@ -1,10 +1,11 @@
 package upload
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"am-erp-go/internal/infrastructure/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +25,7 @@ func NewUploadHandler() *UploadHandler {
 func (h *UploadHandler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "file required"})
+		response.BadRequest(c, "file required")
 		return
 	}
 
@@ -35,21 +36,17 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 
 	targetDir := filepath.Join(h.baseDir, subDir)
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
 	filename := time.Now().Format("20060102150405") + "-" + filepath.Base(file.Filename)
 	dst := filepath.Join(targetDir, filename)
 	if err := c.SaveUploadedFile(file, dst); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
 	url := "/" + filepath.ToSlash(filepath.Join(h.baseDir, subDir, filename))
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    gin.H{"url": url, "filename": filename},
-	})
+	response.Success(c, map[string]interface{}{"url": url, "filename": filename})
 }

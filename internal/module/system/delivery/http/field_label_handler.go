@@ -1,9 +1,9 @@
 package http
 
 import (
-	"net/http"
 	"strconv"
 
+	"am-erp-go/internal/infrastructure/response"
 	systemdomain "am-erp-go/internal/module/system/domain"
 
 	"github.com/gin-gonic/gin"
@@ -33,17 +33,13 @@ func (h *FieldLabelHandler) GetLabels(c *gin.Context) {
 
 	labels, err := h.usecase.GetLabels(locale)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"locale": locale,
-			"labels": labels,
-		},
+	response.Success(c, map[string]interface{}{
+		"locale": locale,
+		"labels": labels,
 	})
 }
 
@@ -54,72 +50,63 @@ func (h *FieldLabelHandler) List(c *gin.Context) {
 
 	items, total, err := h.usecase.List(page, pageSize, keyword)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":      items,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
-	})
+	response.SuccessPage(c, items, total, page, pageSize)
 }
 
 func (h *FieldLabelHandler) Create(c *gin.Context) {
 	var label systemdomain.FieldLabel
 	if err := c.ShouldBindJSON(&label); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	if err := h.usecase.Create(&label); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": label})
+	response.Success(c, label)
 }
 
 func (h *FieldLabelHandler) Update(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var label systemdomain.FieldLabel
 	if err := c.ShouldBindJSON(&label); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	label.ID = id
 	if err := h.usecase.Update(&label); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": label})
+	response.Success(c, label)
 }
 
 func (h *FieldLabelHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.usecase.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }
 
 func parseIntOrDefault(s string, defaultVal int) int {

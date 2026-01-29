@@ -1,9 +1,9 @@
 package http
 
 import (
-	"net/http"
 	"strconv"
 
+	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/product/domain"
 	"am-erp-go/internal/module/product/usecase"
 
@@ -27,39 +27,28 @@ func (h *ComboHandler) ListCombos(c *gin.Context) {
 
 	combos, total, err := h.comboUsecase.ListCombos(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  combos,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, combos, total, params.Page, params.PageSize)
 }
 
 // GetCombo 获取组合详情
 func (h *ComboHandler) GetCombo(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	combo, err := h.comboUsecase.GetCombo(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "combo not found"})
+		response.NotFound(c, "combo not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    combo,
-	})
+	response.Success(c, combo)
 }
 
 type comboUpsertRequest struct {
@@ -71,7 +60,7 @@ type comboUpsertRequest struct {
 func (h *ComboHandler) CreateCombo(c *gin.Context) {
 	var req comboUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -80,28 +69,24 @@ func (h *ComboHandler) CreateCombo(c *gin.Context) {
 		ProductIDs:    req.ProductIDs,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    combo,
-	})
+	response.Success(c, combo)
 }
 
 // UpdateCombo 更新组合
 func (h *ComboHandler) UpdateCombo(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req comboUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -114,32 +99,25 @@ func (h *ComboHandler) UpdateCombo(c *gin.Context) {
 		ProductIDs:    req.ProductIDs,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    combo,
-	})
+	response.Success(c, combo)
 }
 
 // DeleteCombo 删除组合
 func (h *ComboHandler) DeleteCombo(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.comboUsecase.DeleteCombo(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }

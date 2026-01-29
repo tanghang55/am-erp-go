@@ -2,9 +2,9 @@ package http
 
 import (
 	"errors"
-	"net/http"
 	"strconv"
 
+	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/procurement/domain"
 	"am-erp-go/internal/module/procurement/usecase"
 
@@ -39,39 +39,28 @@ func (h *PurchaseOrderHandler) ListPurchaseOrders(c *gin.Context) {
 
 	orders, total, err := h.usecase.List(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  orders,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, orders, total, params.Page, params.PageSize)
 }
 
 // GetPurchaseOrder 获取采购单详情
 func (h *PurchaseOrderHandler) GetPurchaseOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	order, err := h.usecase.Get(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "purchase order not found"})
+		response.NotFound(c, "purchase order not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    order,
-	})
+	response.Success(c, order)
 }
 
 type purchaseOrderItemRequest struct {
@@ -93,7 +82,7 @@ type purchaseOrderUpsertRequest struct {
 func (h *PurchaseOrderHandler) CreatePurchaseOrder(c *gin.Context) {
 	var req purchaseOrderUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -123,31 +112,27 @@ func (h *PurchaseOrderHandler) CreatePurchaseOrder(c *gin.Context) {
 			errors.Is(err, usecase.ErrPurchaseOrderMissingItems) ||
 			errors.Is(err, usecase.ErrPurchaseOrderComboProviderNeeded) ||
 			errors.Is(err, usecase.ErrPurchaseOrderComboNoComponents) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+			response.BadRequest(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    created,
-	})
+	response.Success(c, created)
 }
 
 // UpdatePurchaseOrder 更新采购单
 func (h *PurchaseOrderHandler) UpdatePurchaseOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req purchaseOrderUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -172,53 +157,43 @@ func (h *PurchaseOrderHandler) UpdatePurchaseOrder(c *gin.Context) {
 
 	updated, err := h.usecase.Update(c, id, order)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    updated,
-	})
+	response.Success(c, updated)
 }
 
 // DeletePurchaseOrder 删除采购单
 func (h *PurchaseOrderHandler) DeletePurchaseOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.usecase.Delete(c, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 // SubmitPurchaseOrder 提交采购单
 func (h *PurchaseOrderHandler) SubmitPurchaseOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.usecase.Submit(c, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 type purchaseOrderShipRequest struct {
@@ -230,13 +205,13 @@ type purchaseOrderShipRequest struct {
 func (h *PurchaseOrderHandler) MarkPurchaseOrderShipped(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req purchaseOrderShipRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -246,14 +221,11 @@ func (h *PurchaseOrderHandler) MarkPurchaseOrderShipped(c *gin.Context) {
 	}
 
 	if err := h.usecase.MarkShipped(c, id, params); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 type purchaseOrderReceiveRequest struct {
@@ -266,13 +238,13 @@ type purchaseOrderReceiveRequest struct {
 func (h *PurchaseOrderHandler) ReceivePurchaseOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req purchaseOrderReceiveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -283,33 +255,27 @@ func (h *PurchaseOrderHandler) ReceivePurchaseOrder(c *gin.Context) {
 	}
 
 	if err := h.usecase.Receive(c, id, params); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 // ClosePurchaseOrder 关闭采购单
 func (h *PurchaseOrderHandler) ClosePurchaseOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.usecase.Close(c, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 func parseIntOrDefault(s string, defaultVal int) int {

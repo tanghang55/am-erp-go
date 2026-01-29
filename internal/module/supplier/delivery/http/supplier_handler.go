@@ -1,10 +1,10 @@
 package http
 
 import (
-	"net/http"
 	"strconv"
 	"strings"
 
+	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/supplier/domain"
 	"am-erp-go/internal/module/supplier/usecase"
 
@@ -66,46 +66,35 @@ func (h *SupplierHandler) ListSuppliers(c *gin.Context) {
 
 	suppliers, total, err := h.supplierUsecase.ListSuppliers(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  suppliers,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, suppliers, total, params.Page, params.PageSize)
 }
 
 // GetSupplier 获取供应商详情
 func (h *SupplierHandler) GetSupplier(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	supplier, err := h.supplierUsecase.GetSupplier(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "supplier not found"})
+		response.NotFound(c, "supplier not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    supplier,
-	})
+	response.Success(c, supplier)
 }
 
 // CreateSupplier 创建供应商
 func (h *SupplierHandler) CreateSupplier(c *gin.Context) {
 	var req supplierUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -118,28 +107,24 @@ func (h *SupplierHandler) CreateSupplier(c *gin.Context) {
 
 	created, err := h.supplierUsecase.CreateSupplier(&supplier, req.Types)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    created,
-	})
+	response.Success(c, created)
 }
 
 // UpdateSupplier 更新供应商
 func (h *SupplierHandler) UpdateSupplier(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -153,47 +138,40 @@ func (h *SupplierHandler) UpdateSupplier(c *gin.Context) {
 
 	updated, err := h.supplierUsecase.UpdateSupplier(&supplier, req.Types)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    updated,
-	})
+	response.Success(c, updated)
 }
 
 // DeleteSupplier 删除供应商
 func (h *SupplierHandler) DeleteSupplier(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.supplierUsecase.DeleteSupplier(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 // CreateSupplierContact 创建供应商联系人
 func (h *SupplierHandler) CreateSupplierContact(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierContactRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -207,28 +185,28 @@ func (h *SupplierHandler) CreateSupplierContact(c *gin.Context) {
 
 	created, err := h.supplierUsecase.CreateSupplierContact(supplierID, &contact)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": created})
+	response.Success(c, created)
 }
 
 // UpdateSupplierContact 更新供应商联系人
 func (h *SupplierHandler) UpdateSupplierContact(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierContactRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid contact id"})
+		response.BadRequest(c, "invalid contact id")
 		return
 	}
 
@@ -243,50 +221,50 @@ func (h *SupplierHandler) UpdateSupplierContact(c *gin.Context) {
 
 	updated, err := h.supplierUsecase.UpdateSupplierContact(supplierID, &contact)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": updated})
+	response.Success(c, updated)
 }
 
 // DeleteSupplierContact 删除供应商联系人
 func (h *SupplierHandler) DeleteSupplierContact(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierContactRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid contact id"})
+		response.BadRequest(c, "invalid contact id")
 		return
 	}
 
 	if err := h.supplierUsecase.DeleteSupplierContact(supplierID, req.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }
 
 // CreateSupplierAccount 创建供应商账户
 func (h *SupplierHandler) CreateSupplierAccount(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -300,28 +278,28 @@ func (h *SupplierHandler) CreateSupplierAccount(c *gin.Context) {
 
 	created, err := h.supplierUsecase.CreateSupplierAccount(supplierID, &account)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": created})
+	response.Success(c, created)
 }
 
 // UpdateSupplierAccount 更新供应商账户
 func (h *SupplierHandler) UpdateSupplierAccount(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid account id"})
+		response.BadRequest(c, "invalid account id")
 		return
 	}
 
@@ -336,115 +314,115 @@ func (h *SupplierHandler) UpdateSupplierAccount(c *gin.Context) {
 
 	updated, err := h.supplierUsecase.UpdateSupplierAccount(supplierID, &account)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": updated})
+	response.Success(c, updated)
 }
 
 // DeleteSupplierAccount 删除供应商账户
 func (h *SupplierHandler) DeleteSupplierAccount(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid account id"})
+		response.BadRequest(c, "invalid account id")
 		return
 	}
 
 	if err := h.supplierUsecase.DeleteSupplierAccount(supplierID, req.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }
 
 // CreateSupplierTag 创建供应商标签
 func (h *SupplierHandler) CreateSupplierTag(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierTagRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	tag := domain.SupplierTag{Tag: req.Tag}
 	created, err := h.supplierUsecase.CreateSupplierTag(supplierID, &tag)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": created})
+	response.Success(c, created)
 }
 
 // UpdateSupplierTag 更新供应商标签
 func (h *SupplierHandler) UpdateSupplierTag(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierTagRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid tag id"})
+		response.BadRequest(c, "invalid tag id")
 		return
 	}
 
 	tag := domain.SupplierTag{ID: req.ID, Tag: req.Tag}
 	updated, err := h.supplierUsecase.UpdateSupplierTag(supplierID, &tag)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": updated})
+	response.Success(c, updated)
 }
 
 // DeleteSupplierTag 删除供应商标签
 func (h *SupplierHandler) DeleteSupplierTag(c *gin.Context) {
 	supplierID, err := parseUintParam(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req supplierTagRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid tag id"})
+		response.BadRequest(c, "invalid tag id")
 		return
 	}
 
 	if err := h.supplierUsecase.DeleteSupplierTag(supplierID, req.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }
 
 // ==================== Helper ====================

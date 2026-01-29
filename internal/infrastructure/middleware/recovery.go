@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"log"
-	"net/http"
 	"runtime/debug"
 
 	"am-erp-go/internal/infrastructure/response"
@@ -20,11 +19,8 @@ func Recovery() gin.HandlerFunc {
 				log.Printf("[Recovery] panic recovered: %v\n%s", err, debug.Stack())
 
 				// 返回统一的错误响应
-				c.AbortWithStatusJSON(http.StatusInternalServerError, response.Response{
-					Code:    500,
-					Message: "服务器内部错误",
-					Success: false,
-				})
+				response.InternalError(c, "服务器内部错误")
+				c.Abort()
 			}
 		}()
 		c.Next()

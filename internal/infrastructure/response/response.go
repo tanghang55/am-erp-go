@@ -15,8 +15,10 @@ type Response struct {
 
 // PaginatedData 分页数据结构
 type PaginatedData struct {
-	Data  interface{} `json:"data"`
-	Total int64       `json:"total"`
+	Data     interface{} `json:"data"`
+	Total    int64       `json:"total"`
+	Page     int         `json:"page,omitempty"`
+	PageSize int         `json:"page_size,omitempty"`
 }
 
 // Success 成功响应（单条数据或无数据）
@@ -37,6 +39,11 @@ func SuccessMessage(c *gin.Context, message string, data interface{}) {
 	})
 }
 
+// SuccessWithMessage 成功响应（SuccessMessage 的别名）
+func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
+	SuccessMessage(c, message, data)
+}
+
 // Paginated 分页响应
 func Paginated(c *gin.Context, list interface{}, total int64) {
 	c.JSON(http.StatusOK, Response{
@@ -46,6 +53,24 @@ func Paginated(c *gin.Context, list interface{}, total int64) {
 			Data:  list,
 			Total: total,
 		},
+	})
+}
+
+// SuccessPage 分页响应（包含页码，可选page_size）
+func SuccessPage(c *gin.Context, list interface{}, total int64, page int, pageSize ...int) {
+	data := PaginatedData{
+		Data:  list,
+		Total: total,
+		Page:  page,
+	}
+	if len(pageSize) > 0 {
+		data.PageSize = pageSize[0]
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Code:    0,
+		Message: "success",
+		Data:    data,
 	})
 }
 
@@ -75,4 +100,9 @@ func NotFound(c *gin.Context, message string) {
 // InternalError 500错误
 func InternalError(c *gin.Context, message string) {
 	Error(c, http.StatusInternalServerError, message)
+}
+
+// ServerError 500错误（InternalError 别名）
+func ServerError(c *gin.Context, message string) {
+	InternalError(c, message)
 }

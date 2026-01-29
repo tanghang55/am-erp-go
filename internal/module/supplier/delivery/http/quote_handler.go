@@ -2,9 +2,9 @@ package http
 
 import (
 	"errors"
-	"net/http"
 	"strconv"
 
+	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/supplier/domain"
 	"am-erp-go/internal/module/supplier/usecase"
 
@@ -57,29 +57,22 @@ func (h *QuoteHandler) ListProductQuotes(c *gin.Context) {
 
 	rows, total, err := h.quoteUsecase.ListProductQuotes(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  rows,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, rows, total, params.Page, params.PageSize)
 }
 
 // CreateQuote 创建报价
 func (h *QuoteHandler) CreateQuote(c *gin.Context) {
 	var req quoteUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ProductID == 0 || req.SupplierID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid product or supplier id"})
+		response.BadRequest(c, "invalid product or supplier id")
 		return
 	}
 
@@ -97,25 +90,25 @@ func (h *QuoteHandler) CreateQuote(c *gin.Context) {
 	created, err := h.quoteUsecase.CreateQuote(c, &quote)
 	if err != nil {
 		if errors.Is(err, usecase.ErrQuoteExists) || errors.Is(err, usecase.ErrQuotePriceInvalid) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+			response.BadRequest(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": created})
+	response.Success(c, created)
 }
 
 // UpdateQuote 更新报价
 func (h *QuoteHandler) UpdateQuote(c *gin.Context) {
 	var req quoteUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ProductID == 0 || req.SupplierID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid product or supplier id"})
+		response.BadRequest(c, "invalid product or supplier id")
 		return
 	}
 
@@ -133,68 +126,68 @@ func (h *QuoteHandler) UpdateQuote(c *gin.Context) {
 	updated, err := h.quoteUsecase.UpdateQuote(c, &quote)
 	if err != nil {
 		if errors.Is(err, usecase.ErrQuotePriceInvalid) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+			response.BadRequest(c, err.Error())
 			return
 		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "quote not found"})
+			response.NotFound(c, "quote not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": updated})
+	response.Success(c, updated)
 }
 
 // DeleteQuote 删除报价
 func (h *QuoteHandler) DeleteQuote(c *gin.Context) {
 	var req quoteDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ProductID == 0 || req.SupplierID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid product or supplier id"})
+		response.BadRequest(c, "invalid product or supplier id")
 		return
 	}
 
 	if err := h.quoteUsecase.DeleteQuote(c, req.ProductID, req.SupplierID); err != nil {
 		if errors.Is(err, usecase.ErrDefaultSupplierQuote) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+			response.BadRequest(c, err.Error())
 			return
 		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "quote not found"})
+			response.NotFound(c, "quote not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }
 
 // SetDefaultSupplier 设置默认供应商
 func (h *QuoteHandler) SetDefaultSupplier(c *gin.Context) {
 	var req quoteDefaultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 	if req.ProductID == 0 || req.SupplierID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid product or supplier id"})
+		response.BadRequest(c, "invalid product or supplier id")
 		return
 	}
 
 	if err := h.quoteUsecase.SetDefaultSupplier(c, req.ProductID, req.SupplierID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "quote not found"})
+			response.NotFound(c, "quote not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+	response.Success(c, nil)
 }

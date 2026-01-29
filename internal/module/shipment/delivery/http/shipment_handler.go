@@ -2,9 +2,9 @@ package http
 
 import (
 	"errors"
-	"net/http"
 	"strconv"
 
+	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/shipment/domain"
 	"am-erp-go/internal/module/shipment/usecase"
 
@@ -53,41 +53,28 @@ func (h *ShipmentHandler) ListShipments(c *gin.Context) {
 
 	shipments, total, err := h.usecase.List(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  shipments,
-			"total": total,
-		},
-		"success": true,
-	})
+	response.SuccessPage(c, shipments, total, params.Page, params.PageSize)
 }
 
 // GetShipment 获取发货单详情
 func (h *ShipmentHandler) GetShipment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	shipment, err := h.usecase.Get(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "shipment not found"})
+		response.NotFound(c, "shipment not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    shipment,
-		"success": true,
-	})
+	response.Success(c, shipment)
 }
 
 type shipmentItemRequest struct {
@@ -112,7 +99,7 @@ type createShipmentRequest struct {
 func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 	var req createShipmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -140,26 +127,21 @@ func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 	shipment, err := h.usecase.Create(c, params)
 	if err != nil {
 		if errors.Is(err, usecase.ErrEmptyItems) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+			response.BadRequest(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    shipment,
-		"success": true,
-	})
+	response.Success(c, shipment)
 }
 
 // ConfirmShipment 确认发货单 (DRAFT → CONFIRMED)
 func (h *ShipmentHandler) ConfirmShipment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
@@ -176,15 +158,11 @@ func (h *ShipmentHandler) ConfirmShipment(c *gin.Context) {
 	}
 
 	if err := h.usecase.Confirm(c, id, params); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"success": true,
-	})
+	response.Success(c, nil)
 }
 
 type markShippedRequest struct {
@@ -201,13 +179,13 @@ type markShippedRequest struct {
 func (h *ShipmentHandler) MarkShipmentShipped(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req markShippedRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -222,15 +200,11 @@ func (h *ShipmentHandler) MarkShipmentShipped(c *gin.Context) {
 	}
 
 	if err := h.usecase.MarkShipped(c, id, params); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"success": true,
-	})
+	response.Success(c, nil)
 }
 
 type markDeliveredRequest struct {
@@ -243,13 +217,13 @@ type markDeliveredRequest struct {
 func (h *ShipmentHandler) MarkShipmentDelivered(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	var req markDeliveredRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -260,15 +234,11 @@ func (h *ShipmentHandler) MarkShipmentDelivered(c *gin.Context) {
 	}
 
 	if err := h.usecase.MarkDelivered(c, id, params); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"success": true,
-	})
+	response.Success(c, nil)
 }
 
 type cancelShipmentRequest struct {
@@ -280,7 +250,7 @@ type cancelShipmentRequest struct {
 func (h *ShipmentHandler) CancelShipment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
@@ -297,35 +267,27 @@ func (h *ShipmentHandler) CancelShipment(c *gin.Context) {
 	}
 
 	if err := h.usecase.Cancel(c, id, params); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"success": true,
-	})
+	response.Success(c, nil)
 }
 
 // DeleteShipment 删除发货单
 func (h *ShipmentHandler) DeleteShipment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	if err := h.usecase.Delete(c, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"success": true,
-	})
+	response.Success(c, nil)
 }
 
 func parseIntOrDefault(s string, defaultVal int) int {

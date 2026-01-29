@@ -1,8 +1,7 @@
 package http
 
 import (
-	"net/http"
-
+	"am-erp-go/internal/infrastructure/response"
 	systemdomain "am-erp-go/internal/module/system/domain"
 
 	"github.com/gin-gonic/gin"
@@ -36,16 +35,9 @@ func (h *AuditLogHandler) List(c *gin.Context) {
 
 	items, total, err := h.usecase.List(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  items,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, items, total, params.Page, params.PageSize)
 }

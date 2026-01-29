@@ -2,10 +2,10 @@ package http
 
 import (
 	"errors"
-	"net/http"
 	"strconv"
 	"time"
 
+	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/inventory/domain"
 	"am-erp-go/internal/module/inventory/usecase"
 
@@ -54,52 +54,41 @@ func (h *InventoryHandler) ListMovements(c *gin.Context) {
 
 	movements, total, err := h.usecase.ListMovements(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  movements,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, movements, total, params.Page, params.PageSize)
 }
 
 // GetMovement 获取流水详情
 func (h *InventoryHandler) GetMovement(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
+		response.BadRequest(c, "invalid id")
 		return
 	}
 
 	movement, err := h.usecase.GetMovement(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "movement not found"})
+		response.NotFound(c, "movement not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    movement,
-	})
+	response.Success(c, movement)
 }
 
 type createMovementRequest struct {
-	SkuID           uint64  `json:"sku_id" binding:"required"`
-	WarehouseID     uint64  `json:"warehouse_id" binding:"required"`
-	Quantity        int     `json:"quantity" binding:"required"`
-	ReferenceType   *string `json:"reference_type"`
-	ReferenceID     *uint64 `json:"reference_id"`
-	ReferenceNumber *string `json:"reference_number"`
+	SkuID           uint64   `json:"sku_id" binding:"required"`
+	WarehouseID     uint64   `json:"warehouse_id" binding:"required"`
+	Quantity        int      `json:"quantity" binding:"required"`
+	ReferenceType   *string  `json:"reference_type"`
+	ReferenceID     *uint64  `json:"reference_id"`
+	ReferenceNumber *string  `json:"reference_number"`
 	UnitCost        *float64 `json:"unit_cost"`
-	Remark          *string `json:"remark"`
-	OperatorID      *uint64 `json:"operator_id"`
-	OperatedAt      *string `json:"operated_at"`
+	Remark          *string  `json:"remark"`
+	OperatorID      *uint64  `json:"operator_id"`
+	OperatedAt      *string  `json:"operated_at"`
 }
 
 // CreatePurchaseReceipt 采购入库
@@ -135,7 +124,7 @@ func (h *InventoryHandler) CreateReturnReceipt(c *gin.Context) {
 func (h *InventoryHandler) createMovement(c *gin.Context, movementType domain.MovementType) {
 	var req createMovementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -143,7 +132,7 @@ func (h *InventoryHandler) createMovement(c *gin.Context, movementType domain.Mo
 	if req.OperatedAt != nil {
 		t, err := time.Parse(time.RFC3339, *req.OperatedAt)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid operated_at format"})
+			response.BadRequest(c, "invalid operated_at format")
 			return
 		}
 		operatedAt = &t
@@ -166,22 +155,18 @@ func (h *InventoryHandler) createMovement(c *gin.Context, movementType domain.Mo
 	movement, err := h.usecase.CreateMovement(c, params)
 	if err != nil {
 		if errors.Is(err, usecase.ErrInsufficientStock) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "insufficient stock"})
+			response.BadRequest(c, "insufficient stock")
 			return
 		}
 		if errors.Is(err, usecase.ErrInvalidQuantity) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid quantity"})
+			response.BadRequest(c, "invalid quantity")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    movement,
-	})
+	response.Success(c, movement)
 }
 
 type transferRequest struct {
@@ -200,7 +185,7 @@ type transferRequest struct {
 func (h *InventoryHandler) CreateTransfer(c *gin.Context) {
 	var req transferRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -218,21 +203,18 @@ func (h *InventoryHandler) CreateTransfer(c *gin.Context) {
 
 	if err := h.usecase.Transfer(c, params); err != nil {
 		if errors.Is(err, usecase.ErrInsufficientStock) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "insufficient stock"})
+			response.BadRequest(c, "insufficient stock")
 			return
 		}
 		if errors.Is(err, usecase.ErrInvalidQuantity) {
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid quantity"})
+			response.BadRequest(c, "invalid quantity")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
 
 // ListBalances 获取库存余额列表
@@ -277,18 +259,11 @@ func (h *InventoryHandler) ListBalances(c *gin.Context) {
 
 	balances, total, err := h.usecase.ListBalances(params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.InternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"data":  balances,
-			"total": total,
-		},
-	})
+	response.SuccessPage(c, balances, total, params.Page, params.PageSize)
 }
 
 // GetSkuBalance 获取SKU在指定仓库的库存
@@ -298,27 +273,23 @@ func (h *InventoryHandler) GetSkuBalance(c *gin.Context) {
 
 	skuID, err := strconv.ParseUint(skuIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid sku_id"})
+		response.BadRequest(c, "invalid sku_id")
 		return
 	}
 
 	warehouseID, err := strconv.ParseUint(warehouseIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid warehouse_id"})
+		response.BadRequest(c, "invalid warehouse_id")
 		return
 	}
 
 	balance, err := h.usecase.GetSkuBalance(skuID, warehouseID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "balance not found"})
+		response.NotFound(c, "balance not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    balance,
-	})
+	response.Success(c, balance)
 }
 
 func parseIntOrDefault(s string, defaultVal int) int {
@@ -380,7 +351,7 @@ func (h *InventoryHandler) CreatePlatformReceive(c *gin.Context) {
 func (h *InventoryHandler) createStockTransition(c *gin.Context, movementType domain.MovementType) {
 	var req stockTransitionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -399,15 +370,11 @@ func (h *InventoryHandler) createStockTransition(c *gin.Context, movementType do
 
 	movement, err := h.usecase.CreateMovement(c, params)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    movement,
-	})
+	response.Success(c, movement)
 }
 
 type returnReceiveRequest struct {
@@ -426,7 +393,7 @@ type returnReceiveRequest struct {
 func (h *InventoryHandler) CreateReturnReceive(c *gin.Context) {
 	var req returnReceiveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
@@ -444,15 +411,11 @@ func (h *InventoryHandler) CreateReturnReceive(c *gin.Context) {
 
 	movement, err := h.usecase.RecordReturnReceive(c, params)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    movement,
-	})
+	response.Success(c, movement)
 }
 
 type returnInspectRequest struct {
@@ -470,12 +433,12 @@ type returnInspectRequest struct {
 func (h *InventoryHandler) CreateReturnInspect(c *gin.Context) {
 	var req returnInspectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
 	if req.PassQuantity == 0 && req.FailQuantity == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "pass_quantity or fail_quantity is required"})
+		response.BadRequest(c, "pass_quantity or fail_quantity is required")
 		return
 	}
 
@@ -491,12 +454,9 @@ func (h *InventoryHandler) CreateReturnInspect(c *gin.Context) {
 	}
 
 	if err := h.usecase.ReturnInspect(c, params); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.BadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-	})
+	response.Success(c, nil)
 }
