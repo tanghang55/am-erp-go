@@ -20,6 +20,13 @@ func (r *productRepository) List(params *domain.ProductListParams) ([]domain.Pro
 
 	query := r.db.Model(&domain.Product{})
 
+	invQuery := r.db.Table("inventory_balance").
+		Select("sku_id, SUM(available_quantity) AS inventory_available, SUM(reserved_quantity) AS inventory_reserved, SUM(purchasing_in_transit + pending_inspection + pending_shipment + logistics_in_transit) AS inventory_inbound")
+	if params.WarehouseID != nil {
+		invQuery = invQuery.Where("warehouse_id = ?", *params.WarehouseID)
+	}
+	invQuery = invQuery.Group("sku_id")
+
 	// 仓库库存筛选（只返回有待出库存的产品，用于发货单选择）
 	if params.WarehouseID != nil {
 		query = query.Joins("INNER JOIN inventory_balance ON inventory_balance.sku_id = product.id AND inventory_balance.warehouse_id = ? AND inventory_balance.pending_shipment > 0", *params.WarehouseID)
@@ -61,6 +68,11 @@ func (r *productRepository) List(params *domain.ProductListParams) ([]domain.Pro
 		query = query.Where("product.combo_id IS NOT NULL OR product.is_combo_main =1 ")
 	}
 
+	query = query.
+		Joins("LEFT JOIN supplier ON supplier.id = product.supplier_id").
+		Joins("LEFT JOIN (?) AS inv ON inv.sku_id = product.id", invQuery).
+		Select("product.*, supplier.name AS supplier_name, supplier.supplier_code AS supplier_code, COALESCE(inv.inventory_available, 0) AS inventory_available, COALESCE(inv.inventory_reserved, 0) AS inventory_reserved, COALESCE(inv.inventory_inbound, 0) AS inventory_inbound")
+
 	// 统计总数
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -80,7 +92,17 @@ func (r *productRepository) List(params *domain.ProductListParams) ([]domain.Pro
 
 func (r *productRepository) GetByID(id uint64) (*domain.Product, error) {
 	var product domain.Product
-	if err := r.db.First(&product, id).Error; err != nil {
+
+	invQuery := r.db.Table("inventory_balance").
+		Select("sku_id, SUM(available_quantity) AS inventory_available, SUM(reserved_quantity) AS inventory_reserved, SUM(purchasing_in_transit + pending_inspection + pending_shipment + logistics_in_transit) AS inventory_inbound").
+		Group("sku_id")
+
+	if err := r.db.Table("product").
+		Select("product.*, supplier.name AS supplier_name, supplier.supplier_code AS supplier_code, COALESCE(inv.inventory_available, 0) AS inventory_available, COALESCE(inv.inventory_reserved, 0) AS inventory_reserved, COALESCE(inv.inventory_inbound, 0) AS inventory_inbound").
+		Joins("LEFT JOIN supplier ON supplier.id = product.supplier_id").
+		Joins("LEFT JOIN (?) AS inv ON inv.sku_id = product.id", invQuery).
+		Where("product.id = ?", id).
+		First(&product).Error; err != nil {
 		return nil, err
 	}
 	return &product, nil
