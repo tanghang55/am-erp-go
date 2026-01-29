@@ -58,7 +58,7 @@ func (r *productRepository) List(params *domain.ProductListParams) ([]domain.Pro
 
 	// 排除组合产品的子产品（用于发货单等场景）
 	if params.ExcludeComboChild {
-		query = query.Where("product.combo_id IS NOT NULL AND product.is_combo_main =0 ")
+		query = query.Where("product.combo_id IS NOT NULL OR product.is_combo_main =1 ")
 	}
 
 	// 统计总数

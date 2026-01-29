@@ -16,6 +16,8 @@ import (
 	systemHttp "am-erp-go/internal/module/system/delivery/http"
 	inventoryHttp "am-erp-go/internal/module/inventory/delivery/http"
 	shipmentHttp "am-erp-go/internal/module/shipment/delivery/http"
+	logisticsHttp "am-erp-go/internal/module/logistics/delivery/http"
+	packagingHttp "am-erp-go/internal/module/packaging/delivery/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,10 +35,14 @@ type Router struct {
 	fieldLabelHandler    *systemHttp.FieldLabelHandler
 	auditLogHandler      *systemHttp.AuditLogHandler
 	uploadHandler        *upload.UploadHandler
-	warehouseHandler     *inventoryHttp.WarehouseHandler
-	inventoryHandler     *inventoryHttp.InventoryHandler
-	shipmentHandler      *shipmentHttp.ShipmentHandler
-	packageSpecHandler   *shipmentHttp.PackageSpecHandler
+	warehouseHandler        *inventoryHttp.WarehouseHandler
+	inventoryHandler        *inventoryHttp.InventoryHandler
+	shipmentHandler         *shipmentHttp.ShipmentHandler
+	packageSpecHandler      *shipmentHttp.PackageSpecHandler
+	logisticsProviderHandler *logisticsHttp.LogisticsProviderHandler
+	shippingRateHandler      *logisticsHttp.ShippingRateHandler
+	logisticsServiceHandler  *logisticsHttp.LogisticsServiceHandler
+	packagingHandler         *packagingHttp.PackagingHandler
 }
 
 func NewRouter(
@@ -55,6 +61,10 @@ func NewRouter(
 	inventoryHandler *inventoryHttp.InventoryHandler,
 	shipmentHandler *shipmentHttp.ShipmentHandler,
 	packageSpecHandler *shipmentHttp.PackageSpecHandler,
+	logisticsProviderHandler *logisticsHttp.LogisticsProviderHandler,
+	shippingRateHandler *logisticsHttp.ShippingRateHandler,
+	logisticsServiceHandler *logisticsHttp.LogisticsServiceHandler,
+	packagingHandler *packagingHttp.PackagingHandler,
 ) *Router {
 	// 使用 gin.New() 而不是 gin.Default()，手动配置中间件
 	engine := gin.New()
@@ -75,10 +85,14 @@ func NewRouter(
 		fieldLabelHandler:    fieldLabelHandler,
 		auditLogHandler:      auditLogHandler,
 		uploadHandler:        uploadHandler,
-		warehouseHandler:     warehouseHandler,
-		inventoryHandler:     inventoryHandler,
-		shipmentHandler:      shipmentHandler,
-		packageSpecHandler:   packageSpecHandler,
+		warehouseHandler:        warehouseHandler,
+		inventoryHandler:        inventoryHandler,
+		shipmentHandler:         shipmentHandler,
+		packageSpecHandler:      packageSpecHandler,
+		logisticsProviderHandler: logisticsProviderHandler,
+		shippingRateHandler:      shippingRateHandler,
+		logisticsServiceHandler:  logisticsServiceHandler,
+		packagingHandler:         packagingHandler,
 	}
 }
 
@@ -159,6 +173,8 @@ func (r *Router) Setup() *gin.Engine {
 				products.DELETE("/:id", r.productHandler.DeleteProduct)
 				products.GET("/:id/images", r.productHandler.ListProductImages)
 				products.PUT("/:id/images/reorder", r.productHandler.SaveProductImages)
+				products.GET("/:id/packaging-items", r.productHandler.GetProductPackagingItems)
+				products.PUT("/:id/packaging-items", r.productHandler.SaveProductPackagingItems)
 			}
 
 			// Product Parent routes
@@ -218,9 +234,8 @@ func (r *Router) Setup() *gin.Engine {
 				shipments.GET("", r.shipmentHandler.ListShipments)
 				shipments.GET("/:id", r.shipmentHandler.GetShipment)
 				shipments.POST("", r.shipmentHandler.CreateShipment)
-				shipments.POST("/:id/confirm", r.shipmentHandler.ConfirmShipment)     // DRAFT → CONFIRMED
-				shipments.POST("/:id/pack", r.shipmentHandler.PackShipment)           // CONFIRMED → PACKED
-				shipments.POST("/:id/ship", r.shipmentHandler.MarkShipmentShipped)    // PACKED → SHIPPED
+				shipments.POST("/:id/confirm", r.shipmentHandler.ConfirmShipment)        // DRAFT → CONFIRMED
+				shipments.POST("/:id/ship", r.shipmentHandler.MarkShipmentShipped)    // CONFIRMED → SHIPPED
 				shipments.POST("/:id/delivered", r.shipmentHandler.MarkShipmentDelivered) // SHIPPED → DELIVERED
 				shipments.POST("/:id/cancel", r.shipmentHandler.CancelShipment)       // Cancel with rollback
 				shipments.DELETE("/:id", r.shipmentHandler.DeleteShipment)            // Delete DRAFT or CANCELLED
@@ -228,6 +243,29 @@ func (r *Router) Setup() *gin.Engine {
 
 			// Package Spec routes (装箱规格)
 			r.packageSpecHandler.RegisterRoutes(protected)
+
+			// Logistics routes
+			r.logisticsProviderHandler.RegisterProviderRoutes(protected)
+			r.shippingRateHandler.RegisterRateRoutes(protected)
+			r.logisticsServiceHandler.RegisterServiceRoutes(protected)
+
+			// Packaging routes
+			packaging := protected.Group("/packaging")
+			{
+				packaging.GET("/items", r.packagingHandler.ListItems)
+				packaging.GET("/items/low-stock", r.packagingHandler.GetLowStockItems)
+				packaging.GET("/items/:id", r.packagingHandler.GetItem)
+				packaging.POST("/items", r.packagingHandler.CreateItem)
+				packaging.PUT("/items/:id", r.packagingHandler.UpdateItem)
+				packaging.DELETE("/items/:id", r.packagingHandler.DeleteItem)
+
+				packaging.GET("/ledger", r.packagingHandler.ListLedgers)
+				packaging.GET("/ledger/:id", r.packagingHandler.GetLedger)
+				packaging.POST("/ledger/inbound", r.packagingHandler.CreateInboundLedger)
+				packaging.POST("/ledger/outbound", r.packagingHandler.CreateOutboundLedger)
+				packaging.POST("/ledger/adjustment", r.packagingHandler.CreateAdjustmentLedger)
+				packaging.GET("/ledger/usage-summary", r.packagingHandler.GetUsageSummary)
+			}
 
 			// Inventory routes
 			inventory := protected.Group("/inventory")

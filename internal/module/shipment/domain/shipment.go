@@ -5,12 +5,11 @@ import "time"
 type ShipmentStatus string
 
 const (
-	ShipmentStatusDraft      ShipmentStatus = "DRAFT"      // 草稿
-	ShipmentStatusConfirmed  ShipmentStatus = "CONFIRMED"  // 已确认(库存已锁定)
-	ShipmentStatusPacked     ShipmentStatus = "PACKED"     // 已打包(库存已扣减到待出)
-	ShipmentStatusShipped    ShipmentStatus = "SHIPPED"    // 已发货(库存已扣减到在途)
-	ShipmentStatusDelivered  ShipmentStatus = "DELIVERED"  // 已送达
-	ShipmentStatusCancelled  ShipmentStatus = "CANCELLED"  // 已取消
+	ShipmentStatusDraft     ShipmentStatus = "DRAFT"     // 草稿
+	ShipmentStatusConfirmed ShipmentStatus = "CONFIRMED" // 已确认(库存已锁定)
+	ShipmentStatusShipped   ShipmentStatus = "SHIPPED"   // 已发货(库存已扣减到在途)
+	ShipmentStatusDelivered ShipmentStatus = "DELIVERED" // 已送达
+	ShipmentStatusCancelled ShipmentStatus = "CANCELLED" // 已取消
 )
 
 type DestinationType string
@@ -34,6 +33,9 @@ type Shipment struct {
 	// 发货仓库
 	WarehouseID    uint64         `json:"warehouse_id" gorm:"column:warehouse_id;not null;index"`
 
+	// 目的地仓库（新增）
+	DestinationWarehouseID *uint64 `json:"destination_warehouse_id" gorm:"column:destination_warehouse_id;index"`
+
 	// 收货方信息（通用）
 	DestinationType    *DestinationType `json:"destination_type" gorm:"column:destination_type;type:enum('PLATFORM_WAREHOUSE','CUSTOMER','OWN_WAREHOUSE','SUPPLIER','OTHER');default:'PLATFORM_WAREHOUSE'"`
 	DestinationName    *string          `json:"destination_name" gorm:"column:destination_name;size:200"`
@@ -41,6 +43,15 @@ type Shipment struct {
 	DestinationPhone   *string          `json:"destination_phone" gorm:"column:destination_phone;size:50"`
 	DestinationAddress *string          `json:"destination_address" gorm:"column:destination_address;type:text"`
 	DestinationCode    *string          `json:"destination_code" gorm:"column:destination_code;size:50"`
+
+	// 物流供应商（新增）
+	LogisticsProviderID *uint64 `json:"logistics_provider_id" gorm:"column:logistics_provider_id;index"`
+
+	// 运费报价（新增）
+	ShippingRateID *uint64 `json:"shipping_rate_id" gorm:"column:shipping_rate_id;index"`
+
+	// 运输方式（新增）
+	TransportMode *string `json:"transport_mode" gorm:"column:transport_mode;type:enum('EXPRESS','AIR','SEA','RAIL','TRUCK');index"`
 
 	// 物流信息（通用）
 	Carrier        *string        `json:"carrier" gorm:"column:carrier;size:50"`
@@ -61,8 +72,18 @@ type Shipment struct {
 	ExpectedDeliveryDate *string    `json:"expected_delivery_date" gorm:"column:expected_delivery_date;type:date"`
 	ActualDeliveryDate   *string    `json:"actual_delivery_date" gorm:"column:actual_delivery_date;type:date"`
 
-	// 状态（简化）
-	Status ShipmentStatus `json:"status" gorm:"column:status;type:enum('DRAFT','CONFIRMED','PACKED','SHIPPED','DELIVERED','CANCELLED');default:'DRAFT';index"`
+	// 状态
+	Status ShipmentStatus `json:"status" gorm:"column:status;type:enum('DRAFT','CONFIRMED','SHIPPED','DELIVERED','CANCELLED');default:'DRAFT';index"`
+
+	// 详细时间节点（新增）
+	ConfirmedAt *time.Time `json:"confirmed_at" gorm:"column:confirmed_at;index"`
+	ShippedAt   *time.Time `json:"shipped_at" gorm:"column:shipped_at;index"`
+	DeliveredAt *time.Time `json:"delivered_at" gorm:"column:delivered_at;index"`
+
+	// 操作人记录（新增）
+	ConfirmedBy  *uint64 `json:"confirmed_by" gorm:"column:confirmed_by"`
+	ShippedBy    *uint64 `json:"shipped_by" gorm:"column:shipped_by"`
+	DeliveredBy  *uint64 `json:"delivered_by" gorm:"column:delivered_by"`
 
 	// 库存标记
 	InventoryLocked   bool `json:"inventory_locked" gorm:"column:inventory_locked;default:0"`
@@ -79,8 +100,11 @@ type Shipment struct {
 	GmtModified time.Time `json:"updated_at" gorm:"column:gmt_modified;autoUpdateTime"`
 
 	// Relations
-	Items     []ShipmentItem `json:"items,omitempty" gorm:"-"`
-	Warehouse interface{}    `json:"warehouse,omitempty" gorm:"-"` // 仓库信息
+	Items                []ShipmentItem `json:"items,omitempty" gorm:"-"`
+	Warehouse            interface{}    `json:"warehouse,omitempty" gorm:"-"`             // 发货仓库信息
+	DestinationWarehouse interface{}    `json:"destination_warehouse,omitempty" gorm:"-"` // 目的地仓库信息
+	LogisticsProvider    interface{}    `json:"logistics_provider,omitempty" gorm:"-"`    // 物流供应商信息
+	ShippingRate         interface{}    `json:"shipping_rate,omitempty" gorm:"-"`         // 运费报价信息
 }
 
 func (Shipment) TableName() string {
@@ -152,10 +176,6 @@ type CreateShipmentItemParams struct {
 }
 
 type ConfirmShipmentParams struct {
-	OperatorID *uint64
-}
-
-type PackShipmentParams struct {
 	OperatorID *uint64
 }
 

@@ -73,3 +73,35 @@ type ProductParent struct {
 func (ProductParent) TableName() string {
 	return "product_parent"
 }
+
+// ProductPackagingItem 产品包材关联实体
+type ProductPackagingItem struct {
+	ID               uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
+	ProductID        uint64    `json:"product_id" gorm:"column:product_id;not null"`
+	PackagingItemID  uint64    `json:"packaging_item_id" gorm:"column:packaging_item_id;not null"`
+	QuantityPerUnit  float64   `json:"quantity_per_unit" gorm:"column:quantity_per_unit;type:decimal(10,3);not null"`
+	Notes            string    `json:"notes" gorm:"size:500"`
+	CreatedBy        *uint64   `json:"created_by" gorm:"column:created_by"`
+	UpdatedBy        *uint64   `json:"updated_by" gorm:"column:updated_by"`
+	GmtCreate        time.Time `json:"gmt_create" gorm:"column:gmt_create;autoCreateTime"`
+	GmtModified      time.Time `json:"gmt_modified" gorm:"column:gmt_modified;autoUpdateTime"`
+
+	// 关联包材详情（查询时关联）
+	PackagingItem    *PackagingItemDetail `json:"packaging_item,omitempty" gorm:"-"`
+}
+
+func (ProductPackagingItem) TableName() string {
+	return "product_packaging_items"
+}
+
+// PackagingItemDetail 包材详情（用于关联查询）
+type PackagingItemDetail struct {
+	ID              uint64  `json:"id"`
+	ItemCode        string  `json:"item_code"`
+	ItemName        string  `json:"item_name"`
+	Specification   string  `json:"specification"`
+	Unit            string  `json:"unit"`
+	UnitCost        float64 `json:"unit_cost"`
+	Currency        string  `json:"currency"`
+	QuantityOnHand  uint64  `json:"quantity_on_hand"`
+}

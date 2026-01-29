@@ -30,6 +30,12 @@ import (
 	shipmentHttp "am-erp-go/internal/module/shipment/delivery/http"
 	shipmentRepo "am-erp-go/internal/module/shipment/repository"
 	shipmentUsecase "am-erp-go/internal/module/shipment/usecase"
+	logisticsHttp "am-erp-go/internal/module/logistics/delivery/http"
+	logisticsRepo "am-erp-go/internal/module/logistics/repository"
+	logisticsUsecase "am-erp-go/internal/module/logistics/usecase"
+	packagingHttp "am-erp-go/internal/module/packaging/delivery/http"
+	packagingRepo "am-erp-go/internal/module/packaging/repository"
+	packagingUsecase "am-erp-go/internal/module/packaging/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -67,9 +73,11 @@ func Build() (*App, error) {
 
 	productRepository := productRepo.NewProductRepository(database)
 	productParentRepository := productRepo.NewProductParentRepository(database)
+	productPackagingRepository := productRepo.NewProductPackagingRepository(database)
 	productSvc := productUsecase.NewProductUsecase(
 		productRepository,
 		productParentRepository,
+		productPackagingRepository,
 	)
 	imageRepository := productRepo.NewProductImageRepository(database)
 	imageUsecase := productUsecase.NewProductImageUsecase(imageRepository, productRepository)
@@ -131,8 +139,31 @@ func Build() (*App, error) {
 
 	// 装箱规格
 	packageSpecRepository := shipmentRepo.NewPackageSpecRepository(database)
-	packageSpecUsecaseObj := shipmentUsecase.NewPackageSpecUseCase(packageSpecRepository)
+	packageSpecPackagingRepository := shipmentRepo.NewPackageSpecPackagingRepository(database)
+	packageSpecUsecaseObj := shipmentUsecase.NewPackageSpecUseCase(packageSpecRepository, packageSpecPackagingRepository)
 	packageSpecHandler := shipmentHttp.NewPackageSpecHandler(packageSpecUsecaseObj)
+
+	// 物流模块
+	logisticsProviderRepository := logisticsRepo.NewLogisticsProviderRepository(database)
+	shippingRateRepository := logisticsRepo.NewShippingRateRepository(database)
+	logisticsServiceRepository := logisticsRepo.NewLogisticsServiceRepository(database)
+
+	logisticsProviderUsecase := logisticsUsecase.NewLogisticsProviderUsecase(logisticsProviderRepository)
+	shippingRateUsecase := logisticsUsecase.NewShippingRateUsecase(
+		shippingRateRepository,
+		logisticsProviderRepository,
+	)
+	logisticsServiceUsecase := logisticsUsecase.NewLogisticsServiceUsecase(logisticsServiceRepository)
+
+	logisticsProviderHandler := logisticsHttp.NewLogisticsProviderHandler(logisticsProviderUsecase)
+	shippingRateHandler := logisticsHttp.NewShippingRateHandler(shippingRateUsecase)
+	logisticsServiceHandler := logisticsHttp.NewLogisticsServiceHandler(logisticsServiceUsecase)
+
+	// 包材模块
+	packagingItemRepository := packagingRepo.NewPackagingItemRepository(database)
+	packagingLedgerRepository := packagingRepo.NewPackagingLedgerRepository(database)
+	packagingUsecase := packagingUsecase.NewPackagingUsecase(packagingItemRepository, packagingLedgerRepository)
+	packagingHandler := packagingHttp.NewPackagingHandler(packagingUsecase)
 
 	r := router.NewRouter(
 		jwtManager,
@@ -150,6 +181,10 @@ func Build() (*App, error) {
 		inventoryHandler,
 		shipmentHandler,
 		packageSpecHandler,
+		logisticsProviderHandler,
+		shippingRateHandler,
+		logisticsServiceHandler,
+		packagingHandler,
 	)
 	engine := r.Setup()
 

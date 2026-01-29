@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"am-erp-go/internal/module/inventory/domain"
@@ -117,6 +118,14 @@ func (r *InventoryBalanceRepository) GetBySkuAndWarehouse(skuID, warehouseID uin
 		First(&balance).Error
 
 	if err != nil {
+		// 如果没有找到记录，返回一个零值的库存余额对象
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &domain.InventoryBalance{
+				SkuID:       skuID,
+				WarehouseID: warehouseID,
+				// 所有数量字段默认为 0
+			}, nil
+		}
 		return nil, err
 	}
 

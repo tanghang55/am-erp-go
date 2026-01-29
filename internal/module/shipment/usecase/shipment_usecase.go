@@ -118,10 +118,23 @@ func (uc *ShipmentUsecase) Get(id uint64) (*domain.Shipment, error) {
 }
 
 // Create 创建发货单（草稿）
-// 创建时状态为DRAFT，无库存影响
+// 创建时验证待发库存是否充足
 func (uc *ShipmentUsecase) Create(c *gin.Context, params *domain.CreateShipmentParams) (*domain.Shipment, error) {
 	if len(params.Items) == 0 {
 		return nil, ErrEmptyItems
+	}
+
+	// 检查待发库存是否充足
+	if uc.inventoryService != nil {
+		for _, item := range params.Items {
+			balance, err := uc.inventoryService.GetSkuBalance(item.SkuID, params.WarehouseID)
+			if err != nil {
+				return nil, fmt.Errorf("获取 SKU %d 库存失败: %w", item.SkuID, err)
+			}
+			if balance.PendingShipment < item.QuantityPlanned {
+				return nil, fmt.Errorf("待发库存不足: SKU %d 待发库存 %d, 需要 %d", item.SkuID, balance.PendingShipment, item.QuantityPlanned)
+			}
+		}
 	}
 
 	// Generate shipment number
@@ -211,8 +224,11 @@ func (uc *ShipmentUsecase) Confirm(c *gin.Context, id uint64, params *domain.Con
 	}
 
 	// Update shipment
+	now := time.Now()
 	shipment.Status = domain.ShipmentStatusConfirmed
 	shipment.InventoryLocked = true
+	shipment.ConfirmedAt = &now
+	shipment.ConfirmedBy = params.OperatorID
 	shipment.UpdatedBy = params.OperatorID
 
 	if err := uc.shipmentRepo.Update(shipment); err != nil {
@@ -222,31 +238,7 @@ func (uc *ShipmentUsecase) Confirm(c *gin.Context, id uint64, params *domain.Con
 	return nil
 }
 
-// Pack 完成打包 (CONFIRMED → PACKED)
-// 只是状态变更，待发库存在确认时已经检查过了
-func (uc *ShipmentUsecase) Pack(c *gin.Context, id uint64, params *domain.PackShipmentParams) error {
-	shipment, err := uc.shipmentRepo.GetByID(id)
-	if err != nil {
-		return ErrShipmentNotFound
-	}
-
-	// 只有CONFIRMED状态才能打包
-	if shipment.Status != domain.ShipmentStatusConfirmed {
-		return fmt.Errorf("只有已确认的发货单才能打包，当前状态: %s", shipment.Status)
-	}
-
-	// Update shipment - 打包只是状态变更，库存在发货时才扣减
-	shipment.Status = domain.ShipmentStatusPacked
-	shipment.UpdatedBy = params.OperatorID
-
-	if err := uc.shipmentRepo.Update(shipment); err != nil {
-		return fmt.Errorf("failed to update shipment: %w", err)
-	}
-
-	return nil
-}
-
-// MarkShipped 标记发货 (PACKED → SHIPPED)
+// MarkShipped 标记发货 (CONFIRMED → SHIPPED)
 // 执行库存流转: 待出库存 → 物流在途
 func (uc *ShipmentUsecase) MarkShipped(c *gin.Context, id uint64, params *domain.MarkShippedParams) error {
 	shipment, err := uc.shipmentRepo.GetByID(id)
@@ -254,9 +246,9 @@ func (uc *ShipmentUsecase) MarkShipped(c *gin.Context, id uint64, params *domain
 		return ErrShipmentNotFound
 	}
 
-	// 只有PACKED状态才能发货
-	if shipment.Status != domain.ShipmentStatusPacked {
-		return fmt.Errorf("只有已打包的发货单才能标记发货，当前状态: %s", shipment.Status)
+	// 只有CONFIRMED状态才能发货
+	if shipment.Status != domain.ShipmentStatusConfirmed {
+		return fmt.Errorf("只有已确认的发货单才能标记发货，当前状态: %s", shipment.Status)
 	}
 
 	ctx := c.Request.Context()
@@ -310,7 +302,10 @@ func (uc *ShipmentUsecase) MarkShipped(c *gin.Context, id uint64, params *domain
 	shipment.InventoryDeducted = true
 
 	// Update shipment
+	now := time.Now()
 	shipment.Status = domain.ShipmentStatusShipped
+	shipment.ShippedAt = &now
+	shipment.ShippedBy = params.OperatorID
 	shipment.Carrier = params.Carrier
 	shipment.TrackingNumber = params.TrackingNumber
 	if params.ShippingCost != nil {
@@ -345,7 +340,10 @@ func (uc *ShipmentUsecase) MarkDelivered(c *gin.Context, id uint64, params *doma
 	}
 
 	// Update shipment
+	now := time.Now()
 	shipment.Status = domain.ShipmentStatusDelivered
+	shipment.DeliveredAt = &now
+	shipment.DeliveredBy = params.OperatorID
 	if params.ActualDeliveryDate != nil {
 		shipment.ActualDeliveryDate = params.ActualDeliveryDate
 	}
@@ -387,11 +385,7 @@ func (uc *ShipmentUsecase) Cancel(c *gin.Context, id uint64, params *domain.Canc
 		// 草稿直接取消，无需回滚库存
 
 	case domain.ShipmentStatusConfirmed:
-		// 已确认但未打包，只需解除锁定
-		shipment.InventoryLocked = false
-
-	case domain.ShipmentStatusPacked:
-		// 已打包但未发货，只需解除锁定（库存还在待发状态）
+		// 已确认但未发货，只需解除锁定
 		shipment.InventoryLocked = false
 	}
 

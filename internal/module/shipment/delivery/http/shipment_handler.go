@@ -187,38 +187,6 @@ func (h *ShipmentHandler) ConfirmShipment(c *gin.Context) {
 	})
 }
 
-// PackShipment 完成打包 (CONFIRMED → PACKED)
-func (h *ShipmentHandler) PackShipment(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid id"})
-		return
-	}
-
-	var req struct {
-		OperatorID *uint64 `json:"operator_id"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Allow empty body
-		req.OperatorID = nil
-	}
-
-	params := &domain.PackShipmentParams{
-		OperatorID: req.OperatorID,
-	}
-
-	if err := h.usecase.Pack(c, id, params); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"success": true,
-	})
-}
-
 type markShippedRequest struct {
 	Carrier        *string  `json:"carrier"`
 	TrackingNumber *string  `json:"tracking_number"`

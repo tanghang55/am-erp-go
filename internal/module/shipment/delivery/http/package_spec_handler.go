@@ -26,6 +26,8 @@ func (h *PackageSpecHandler) RegisterRoutes(rg *gin.RouterGroup) {
 		group.POST("", h.Create)
 		group.PUT("/:id", h.Update)
 		group.DELETE("/:id", h.Delete)
+		group.GET("/:id/packaging-items", h.GetPackageSpecPackagingItems)
+		group.PUT("/:id/packaging-items", h.SavePackageSpecPackagingItems)
 	}
 }
 
@@ -173,4 +175,52 @@ func (h *PackageSpecHandler) Delete(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "删除成功", nil)
+}
+
+// GetPackageSpecPackagingItems 获取装箱规格的包材配置列表
+func (h *PackageSpecHandler) GetPackageSpecPackagingItems(c *gin.Context) {
+	packageSpecID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "invalid package spec id")
+		return
+	}
+
+	items, err := h.uc.GetPackageSpecPackagingItems(packageSpecID)
+	if err != nil {
+		response.ServerError(c, "获取包材配置失败")
+		return
+	}
+
+	response.Success(c, items)
+}
+
+// SavePackageSpecPackagingItems 保存装箱规格的包材配置
+func (h *PackageSpecHandler) SavePackageSpecPackagingItems(c *gin.Context) {
+	packageSpecID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "invalid package spec id")
+		return
+	}
+
+	var req struct {
+		PackagingItems []domain.PackageSpecPackagingItem `json:"packaging_items"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	if err := h.uc.SavePackageSpecPackagingItems(packageSpecID, req.PackagingItems); err != nil {
+		response.ServerError(c, "保存包材配置失败")
+		return
+	}
+
+	// 返回保存后的数据
+	items, err := h.uc.GetPackageSpecPackagingItems(packageSpecID)
+	if err != nil {
+		response.ServerError(c, "获取包材配置失败")
+		return
+	}
+
+	response.SuccessWithMessage(c, "保存成功", items)
 }

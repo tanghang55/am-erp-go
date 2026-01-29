@@ -335,6 +335,64 @@ func (h *ProductHandler) DeleteProductParent(c *gin.Context) {
 	})
 }
 
+// ==================== Product Packaging ====================
+
+// GetProductPackagingItems 获取产品的包材配置列表
+func (h *ProductHandler) GetProductPackagingItems(c *gin.Context) {
+	productID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid product id"})
+		return
+	}
+
+	items, err := h.productUsecase.GetProductPackagingItems(productID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    items,
+	})
+}
+
+// SaveProductPackagingItems 保存产品的包材配置
+func (h *ProductHandler) SaveProductPackagingItems(c *gin.Context) {
+	productID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid product id"})
+		return
+	}
+
+	var req struct {
+		PackagingItems []domain.ProductPackagingItem `json:"packaging_items"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+
+	if err := h.productUsecase.SaveProductPackagingItems(productID, req.PackagingItems); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		return
+	}
+
+	// 返回保存后的数据
+	items, err := h.productUsecase.GetProductPackagingItems(productID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    items,
+	})
+}
+
 // ==================== Helper ====================
 
 func parseIntOrDefault(s string, defaultVal int) int {

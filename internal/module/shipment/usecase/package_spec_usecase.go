@@ -5,11 +5,18 @@ import (
 )
 
 type PackageSpecUseCase struct {
-	repo domain.PackageSpecRepository
+	repo           domain.PackageSpecRepository
+	packagingRepo  domain.PackageSpecPackagingRepository
 }
 
-func NewPackageSpecUseCase(repo domain.PackageSpecRepository) *PackageSpecUseCase {
-	return &PackageSpecUseCase{repo: repo}
+func NewPackageSpecUseCase(
+	repo domain.PackageSpecRepository,
+	packagingRepo domain.PackageSpecPackagingRepository,
+) *PackageSpecUseCase {
+	return &PackageSpecUseCase{
+		repo:          repo,
+		packagingRepo: packagingRepo,
+	}
 }
 
 func (uc *PackageSpecUseCase) Create(params *domain.CreatePackageSpecParams) (*domain.PackageSpec, error) {
@@ -89,4 +96,14 @@ func (uc *PackageSpecUseCase) Delete(id uint64) error {
 
 func (uc *PackageSpecUseCase) ListByIDs(ids []uint64) ([]*domain.PackageSpec, error) {
 	return uc.repo.ListByIDs(ids)
+}
+
+// PackageSpecPackaging 相关方法
+
+func (uc *PackageSpecUseCase) GetPackageSpecPackagingItems(packageSpecID uint64) ([]domain.PackageSpecPackagingItem, error) {
+	return uc.packagingRepo.ListByPackageSpecID(packageSpecID)
+}
+
+func (uc *PackageSpecUseCase) SavePackageSpecPackagingItems(packageSpecID uint64, items []domain.PackageSpecPackagingItem) error {
+	return uc.packagingRepo.ReplaceAll(packageSpecID, items)
 }

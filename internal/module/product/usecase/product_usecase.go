@@ -5,17 +5,20 @@ import (
 )
 
 type ProductUsecase struct {
-	productRepo       domain.ProductRepository
-	productParentRepo domain.ProductParentRepository
+	productRepo          domain.ProductRepository
+	productParentRepo    domain.ProductParentRepository
+	productPackagingRepo domain.ProductPackagingRepository
 }
 
 func NewProductUsecase(
 	productRepo domain.ProductRepository,
 	productParentRepo domain.ProductParentRepository,
+	productPackagingRepo domain.ProductPackagingRepository,
 ) *ProductUsecase {
 	return &ProductUsecase{
-		productRepo:       productRepo,
-		productParentRepo: productParentRepo,
+		productRepo:          productRepo,
+		productParentRepo:    productParentRepo,
+		productPackagingRepo: productPackagingRepo,
 	}
 }
 
@@ -73,4 +76,14 @@ func (uc *ProductUsecase) UpdateProductParent(parent *domain.ProductParent) erro
 
 func (uc *ProductUsecase) DeleteProductParent(id uint64) error {
 	return uc.productParentRepo.Delete(id)
+}
+
+// ProductPackaging 相关方法
+
+func (uc *ProductUsecase) GetProductPackagingItems(productID uint64) ([]domain.ProductPackagingItem, error) {
+	return uc.productPackagingRepo.ListByProductID(productID)
+}
+
+func (uc *ProductUsecase) SaveProductPackagingItems(productID uint64, items []domain.ProductPackagingItem) error {
+	return uc.productPackagingRepo.ReplaceAll(productID, items)
 }

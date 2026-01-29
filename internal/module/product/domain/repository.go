@@ -62,3 +62,11 @@ type ProductComboRepository interface {
 	ReplaceComboItems(comboID uint64, mainProductID uint64, productIDs []uint64, qtyRatios map[uint64]uint64) error
 	DeleteCombo(comboID uint64) error
 }
+
+// ProductPackagingRepository 产品包材关联仓储接口
+type ProductPackagingRepository interface {
+	// 获取产品的包材配置列表
+	ListByProductID(productID uint64) ([]ProductPackagingItem, error)
+	// 替换产品的包材配置（先删除后插入）
+	ReplaceAll(productID uint64, items []ProductPackagingItem) error
+}

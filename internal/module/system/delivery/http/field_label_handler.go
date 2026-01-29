@@ -62,7 +62,7 @@ func (h *FieldLabelHandler) List(c *gin.Context) {
 		"code":    0,
 		"message": "success",
 		"data": gin.H{
-			"items":     items,
+			"data":      items,
 			"total":     total,
 			"page":      page,
 			"page_size": pageSize,
