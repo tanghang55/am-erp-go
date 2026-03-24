@@ -17,18 +17,33 @@ func (ProductComboItem) TableName() string {
 }
 
 type ProductCombo struct {
-	ComboID     uint64    `json:"combo_id"`
-	MainProduct Product   `json:"main_product"`
-	Products    []Product `json:"products"`
+	ComboID     uint64              `json:"combo_id"`
+	MainProduct Product             `json:"main_product"`
+	Products    []ComboChildProduct `json:"products"`
+	Locked      bool                `json:"locked"`
+	LockReason  string              `json:"lock_reason,omitempty"`
+}
+
+type ComboChildProduct struct {
+	Product
+	QtyRatio uint64 `json:"qty_ratio"`
+}
+
+type ComboChildInput struct {
+	ProductID uint64
+	QtyRatio  uint64
 }
 
 type ComboListParams struct {
-	Page     int
-	PageSize int
+	Page        int
+	PageSize    int
+	Keyword     string
+	Marketplace string
+	Statuses    []string
+	Locked      string
 }
 
 type ComboUpsertParams struct {
 	MainProductID uint64
-	ProductIDs    []uint64
-	QtyRatios     map[uint64]uint64
+	Children      []ComboChildInput
 }

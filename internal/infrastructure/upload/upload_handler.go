@@ -3,8 +3,10 @@ package upload
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"am-erp-go/internal/infrastructure/numbering"
 	"am-erp-go/internal/infrastructure/response"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +14,15 @@ import (
 
 type UploadHandler struct {
 	baseDir string
+	urlBase string
+}
+
+func ResolveURLBase() string {
+	urlBase := os.Getenv("UPLOAD_URL_BASE")
+	if urlBase == "" {
+		urlBase = "/uploads"
+	}
+	return "/" + filepath.ToSlash(filepath.Clean(strings.TrimPrefix(urlBase, "/")))
 }
 
 func NewUploadHandler() *UploadHandler {
@@ -19,7 +30,10 @@ func NewUploadHandler() *UploadHandler {
 	if baseDir == "" {
 		baseDir = "uploads"
 	}
-	return &UploadHandler{baseDir: baseDir}
+	return &UploadHandler{
+		baseDir: baseDir,
+		urlBase: ResolveURLBase(),
+	}
 }
 
 func (h *UploadHandler) UploadImage(c *gin.Context) {
@@ -40,13 +54,14 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
-	filename := time.Now().Format("20060102150405") + "-" + filepath.Base(file.Filename)
+	ext := filepath.Ext(file.Filename)
+	filename := numbering.Generate("UPL", time.Now()) + ext
 	dst := filepath.Join(targetDir, filename)
 	if err := c.SaveUploadedFile(file, dst); err != nil {
 		response.InternalError(c, err.Error())
 		return
 	}
 
-	url := "/" + filepath.ToSlash(filepath.Join(h.baseDir, subDir, filename))
+	url := h.urlBase + "/" + filepath.ToSlash(filepath.Join(subDir, filename))
 	response.Success(c, map[string]interface{}{"url": url, "filename": filename})
 }

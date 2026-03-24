@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"am-erp-go/internal/infrastructure/response"
 	"am-erp-go/internal/module/supplier/domain"
@@ -54,6 +55,14 @@ func (h *QuoteHandler) ListProductQuotes(c *gin.Context) {
 			params.SupplierID = &id
 		}
 	}
+	if productID := c.Query("product_id"); productID != "" {
+		if id, err := strconv.ParseUint(productID, 10, 64); err == nil {
+			params.ProductID = &id
+		}
+	}
+	if productIDs := c.Query("product_ids"); productIDs != "" {
+		params.ProductIDs = parseUint64List(productIDs)
+	}
 
 	rows, total, err := h.quoteUsecase.ListProductQuotes(params)
 	if err != nil {
@@ -62,6 +71,48 @@ func (h *QuoteHandler) ListProductQuotes(c *gin.Context) {
 	}
 
 	response.SuccessPage(c, rows, total, params.Page, params.PageSize)
+}
+
+func parseUint64List(raw string) []uint64 {
+	parts := strings.Split(raw, ",")
+	result := make([]uint64, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseUint(part, 10, 64)
+		if err != nil || id == 0 {
+			continue
+		}
+		result = append(result, id)
+	}
+	return result
+}
+
+func (h *QuoteHandler) GetProductQuote(c *gin.Context) {
+	productID, err := strconv.ParseUint(c.Query("product_id"), 10, 64)
+	if err != nil || productID == 0 {
+		response.BadRequest(c, "invalid product id")
+		return
+	}
+	supplierID, err := strconv.ParseUint(c.Query("supplier_id"), 10, 64)
+	if err != nil || supplierID == 0 {
+		response.BadRequest(c, "invalid supplier id")
+		return
+	}
+
+	quote, err := h.quoteUsecase.GetProductQuote(productID, supplierID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, domain.ErrQuoteNotFound) {
+			response.NotFound(c, "quote not found")
+			return
+		}
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.Success(c, quote)
 }
 
 // CreateQuote 创建报价

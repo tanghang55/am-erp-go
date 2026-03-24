@@ -1,6 +1,17 @@
 package domain
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var ErrQuoteNotFound = errors.New("quote not found")
+
+const (
+	ProductSupplierQuoteStatusPending  = "PENDING"
+	ProductSupplierQuoteStatusActive   = "ACTIVE"
+	ProductSupplierQuoteStatusInactive = "INACTIVE"
+)
 
 type ProductSupplierQuote struct {
 	ID           uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
@@ -42,5 +53,7 @@ type QuoteListParams struct {
 	PageSize    int
 	Keyword     string
 	Marketplace string
+	ProductID   *uint64
+	ProductIDs  []uint64
 	SupplierID  *uint64
 }

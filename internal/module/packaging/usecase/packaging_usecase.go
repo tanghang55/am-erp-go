@@ -2,9 +2,17 @@ package usecase
 
 import (
 	"am-erp-go/internal/module/packaging/domain"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"am-erp-go/internal/infrastructure/validation"
 )
+
+var ErrPackagingSupplierRequired = errors.New("supplier is required")
+var ErrPackagingItemCodeInvalid = errors.New("packaging item code only supports letters, numbers, hyphen and underscore")
+var ErrPackagingItemReferenced = errors.New("packaging item is still referenced by business data")
 
 type PackagingUsecase struct {
 	itemRepo   domain.PackagingItemRepository
@@ -30,24 +38,73 @@ func (uc *PackagingUsecase) ListItems(params *domain.PackagingItemListParams) ([
 	if params.PageSize <= 0 {
 		params.PageSize = 20
 	}
-	return uc.itemRepo.List(params)
+	items, total, err := uc.itemRepo.List(params)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range items {
+		items[i].Deletable = true
+		refCount, err := uc.itemRepo.CountReferences(items[i].ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		items[i].ReferenceCount = refCount
+		if refCount > 0 {
+			items[i].Deletable = false
+			items[i].DeleteBlockReason = "已被业务数据引用，不可删除"
+		}
+	}
+	return items, total, nil
 }
 
 func (uc *PackagingUsecase) GetItem(id uint64) (*domain.PackagingItem, error) {
-	return uc.itemRepo.GetByID(id)
+	item, err := uc.itemRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	item.Deletable = true
+	refCount, err := uc.itemRepo.CountReferences(item.ID)
+	if err != nil {
+		return nil, err
+	}
+	item.ReferenceCount = refCount
+	if refCount > 0 {
+		item.Deletable = false
+		item.DeleteBlockReason = "已被业务数据引用，不可删除"
+	}
+	return item, nil
 }
 
 func (uc *PackagingUsecase) CreateItem(item *domain.PackagingItem) error {
+	if item.SupplierID == nil || *item.SupplierID == 0 {
+		return ErrPackagingSupplierRequired
+	}
+	if !validation.IsValidCode(strings.TrimSpace(item.ItemCode)) {
+		return ErrPackagingItemCodeInvalid
+	}
 	// 生成trace_id
 	item.TraceID = fmt.Sprintf("PKG-%d-%d", time.Now().Unix(), item.CreatedBy)
 	return uc.itemRepo.Create(item)
 }
 
 func (uc *PackagingUsecase) UpdateItem(item *domain.PackagingItem) error {
+	if item.SupplierID == nil || *item.SupplierID == 0 {
+		return ErrPackagingSupplierRequired
+	}
+	if !validation.IsValidCode(strings.TrimSpace(item.ItemCode)) {
+		return ErrPackagingItemCodeInvalid
+	}
 	return uc.itemRepo.Update(item)
 }
 
 func (uc *PackagingUsecase) DeleteItem(id uint64) error {
+	refCount, err := uc.itemRepo.CountReferences(id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrPackagingItemReferenced
+	}
 	return uc.itemRepo.Delete(id)
 }
 

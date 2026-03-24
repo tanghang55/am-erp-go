@@ -1,11 +1,10 @@
 package repository
 
-import (
-	"testing"
+import "testing"
 
-	"am-erp-go/internal/module/supplier/domain"
-)
-
-func TestQuoteRepositoryImplementsInterface(t *testing.T) {
-	var _ domain.QuoteRepository = (*quoteRepository)(nil)
+func TestBuildProductQuoteQueryQualifiesGmtModified(t *testing.T) {
+	expected := "product.id, product.seller_sku, product.asin, product.marketplace, product.title, product.image_url, product.supplier_id, product.gmt_modified AS gmt_modified"
+	if got := productQuoteSelectClause(); got != expected {
+		t.Fatalf("expected qualified gmt_modified select, got %s", got)
+	}
 }

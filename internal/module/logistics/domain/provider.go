@@ -27,26 +27,29 @@ const (
 )
 
 type LogisticsProvider struct {
-	ID            uint64         `json:"id" gorm:"primaryKey;column:id"`
-	ProviderCode  string         `json:"provider_code" gorm:"column:provider_code;uniqueIndex;size:50;not null"`
-	ProviderName  string         `json:"provider_name" gorm:"column:provider_name;size:200;not null"`
-	ProviderType  ProviderType   `json:"provider_type" gorm:"column:provider_type;type:enum('FREIGHT_FORWARDER','COURIER','SHIPPING_LINE','AIRLINE');not null"`
-	ServiceTypes  *string        `json:"service_types" gorm:"column:service_types;size:200"`
-	ContactPerson *string        `json:"contact_person" gorm:"column:contact_person;size:100"`
-	ContactPhone  *string        `json:"contact_phone" gorm:"column:contact_phone;size:50"`
-	ContactEmail  *string        `json:"contact_email" gorm:"column:contact_email;size:100"`
-	Website       *string        `json:"website" gorm:"column:website;size:200"`
-	Country       *string        `json:"country" gorm:"column:country;size:50"`
-	City          *string        `json:"city" gorm:"column:city;size:100"`
-	Address       *string        `json:"address" gorm:"column:address;type:text"`
-	AccountNumber *string        `json:"account_number" gorm:"column:account_number;size:100"`
-	CreditDays    int            `json:"credit_days" gorm:"column:credit_days;default:0"`
-	Status        ProviderStatus `json:"status" gorm:"column:status;type:enum('ACTIVE','INACTIVE');default:ACTIVE"`
-	Remark        *string        `json:"remark" gorm:"column:remark;type:text"`
-	CreatedBy     *uint64        `json:"created_by" gorm:"column:created_by"`
-	UpdatedBy     *uint64        `json:"updated_by" gorm:"column:updated_by"`
-	GmtCreate     time.Time      `json:"created_at" gorm:"column:gmt_create"`
-	GmtModified   time.Time      `json:"updated_at" gorm:"column:gmt_modified"`
+	ID                uint64         `json:"id" gorm:"primaryKey;column:id"`
+	ProviderCode      string         `json:"provider_code" gorm:"column:provider_code;uniqueIndex;size:50;not null"`
+	ProviderName      string         `json:"provider_name" gorm:"column:provider_name;size:200;not null"`
+	ProviderType      ProviderType   `json:"provider_type" gorm:"column:provider_type;type:enum('FREIGHT_FORWARDER','COURIER','SHIPPING_LINE','AIRLINE');not null"`
+	ServiceTypes      *string        `json:"service_types" gorm:"column:service_types;size:200"`
+	ContactPerson     *string        `json:"contact_person" gorm:"column:contact_person;size:100"`
+	ContactPhone      *string        `json:"contact_phone" gorm:"column:contact_phone;size:50"`
+	ContactEmail      *string        `json:"contact_email" gorm:"column:contact_email;size:100"`
+	Website           *string        `json:"website" gorm:"column:website;size:200"`
+	Country           *string        `json:"country" gorm:"column:country;size:50"`
+	City              *string        `json:"city" gorm:"column:city;size:100"`
+	Address           *string        `json:"address" gorm:"column:address;type:text"`
+	AccountNumber     *string        `json:"account_number" gorm:"column:account_number;size:100"`
+	CreditDays        int            `json:"credit_days" gorm:"column:credit_days;default:0"`
+	Status            ProviderStatus `json:"status" gorm:"column:status;type:enum('ACTIVE','INACTIVE');default:ACTIVE"`
+	Remark            *string        `json:"remark" gorm:"column:remark;type:text"`
+	CreatedBy         *uint64        `json:"created_by" gorm:"column:created_by"`
+	UpdatedBy         *uint64        `json:"updated_by" gorm:"column:updated_by"`
+	GmtCreate         time.Time      `json:"created_at" gorm:"column:gmt_create"`
+	GmtModified       time.Time      `json:"updated_at" gorm:"column:gmt_modified"`
+	ReferenceCount    int64          `json:"reference_count" gorm:"-"`
+	Deletable         bool           `json:"deletable" gorm:"-"`
+	DeleteBlockReason string         `json:"delete_block_reason,omitempty" gorm:"-"`
 }
 
 func (LogisticsProvider) TableName() string {

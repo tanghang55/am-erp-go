@@ -19,6 +19,25 @@ func NewShipmentHandler(usecase *usecase.ShipmentUsecase) *ShipmentHandler {
 	return &ShipmentHandler{usecase: usecase}
 }
 
+func (h *ShipmentHandler) respondShipmentError(c *gin.Context, err error) {
+	if err == nil {
+		return
+	}
+	if errors.Is(err, usecase.ErrShipmentNotFound) {
+		response.NotFound(c, "shipment not found")
+		return
+	}
+	if errors.Is(err, usecase.ErrEmptyItems) ||
+		errors.Is(err, usecase.ErrShipmentProductNotFound) ||
+		errors.Is(err, usecase.ErrShipmentInactiveProduct) ||
+		errors.Is(err, usecase.ErrInsufficientInventory) ||
+		errors.Is(err, usecase.ErrInvalidStatus) {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.InternalError(c, err.Error())
+}
+
 // ListShipments 获取发货单列表
 func (h *ShipmentHandler) ListShipments(c *gin.Context) {
 	params := &domain.ShipmentListParams{
@@ -78,7 +97,7 @@ func (h *ShipmentHandler) GetShipment(c *gin.Context) {
 }
 
 type shipmentItemRequest struct {
-	SkuID           uint64   `json:"sku_id"`
+	ProductID       uint64   `json:"product_id"`
 	QuantityPlanned uint     `json:"quantity_planned"`
 	PackageSpecID   *uint64  `json:"package_spec_id"`
 	BoxQuantity     *uint    `json:"box_quantity"`
@@ -88,11 +107,64 @@ type shipmentItemRequest struct {
 }
 
 type createShipmentRequest struct {
-	OrderNumber *string               `json:"order_number"`
-	WarehouseID uint64                `json:"warehouse_id"`
-	Items       []shipmentItemRequest `json:"items"`
-	Remark      *string               `json:"remark"`
-	OperatorID  *uint64               `json:"operator_id"`
+	OrderNumber  *string `json:"order_number"`
+	SalesChannel *string `json:"sales_channel"`
+	WarehouseID  uint64  `json:"warehouse_id"`
+
+	DestinationWarehouseID *uint64                 `json:"destination_warehouse_id"`
+	DestinationType        *domain.DestinationType `json:"destination_type"`
+	DestinationName        *string                 `json:"destination_name"`
+	DestinationCode        *string                 `json:"destination_code"`
+	DestinationContact     *string                 `json:"destination_contact"`
+	DestinationPhone       *string                 `json:"destination_phone"`
+	DestinationAddress     *string                 `json:"destination_address"`
+
+	LogisticsProviderID  *uint64 `json:"logistics_provider_id"`
+	ShippingRateID       *uint64 `json:"shipping_rate_id"`
+	TransportMode        *string `json:"transport_mode"`
+	Carrier              *string `json:"carrier"`
+	TrackingNumber       *string `json:"tracking_number"`
+	ExpectedShipDate     *string `json:"expected_ship_date"`
+	ExpectedDeliveryDate *string `json:"expected_delivery_date"`
+
+	BoxCount    *uint    `json:"box_count"`
+	TotalWeight *float64 `json:"total_weight"`
+	TotalVolume *float64 `json:"total_volume"`
+
+	Items         []shipmentItemRequest `json:"items"`
+	Remark        *string               `json:"remark"`
+	InternalNotes *string               `json:"internal_notes"`
+	OperatorID    *uint64               `json:"operator_id"`
+}
+
+type updateShipmentRequest struct {
+	OrderNumber  *string `json:"order_number"`
+	SalesChannel *string `json:"sales_channel"`
+	WarehouseID  *uint64 `json:"warehouse_id"`
+
+	DestinationWarehouseID *uint64                 `json:"destination_warehouse_id"`
+	DestinationType        *domain.DestinationType `json:"destination_type"`
+	DestinationName        *string                 `json:"destination_name"`
+	DestinationCode        *string                 `json:"destination_code"`
+	DestinationContact     *string                 `json:"destination_contact"`
+	DestinationPhone       *string                 `json:"destination_phone"`
+	DestinationAddress     *string                 `json:"destination_address"`
+
+	LogisticsProviderID  *uint64 `json:"logistics_provider_id"`
+	ShippingRateID       *uint64 `json:"shipping_rate_id"`
+	TransportMode        *string `json:"transport_mode"`
+	Carrier              *string `json:"carrier"`
+	TrackingNumber       *string `json:"tracking_number"`
+	ExpectedDeliveryDate *string `json:"expected_delivery_date"`
+
+	BoxCount    *uint    `json:"box_count"`
+	TotalWeight *float64 `json:"total_weight"`
+	TotalVolume *float64 `json:"total_volume"`
+
+	Items         []shipmentItemRequest `json:"items"`
+	Remark        *string               `json:"remark"`
+	InternalNotes *string               `json:"internal_notes"`
+	OperatorID    *uint64               `json:"operator_id"`
 }
 
 // CreateShipment 创建发货单（打包完成）
@@ -106,7 +178,7 @@ func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 	items := make([]domain.CreateShipmentItemParams, 0, len(req.Items))
 	for _, item := range req.Items {
 		items = append(items, domain.CreateShipmentItemParams{
-			SkuID:           item.SkuID,
+			ProductID:       item.ProductID,
 			QuantityPlanned: item.QuantityPlanned,
 			PackageSpecID:   item.PackageSpecID,
 			BoxQuantity:     item.BoxQuantity,
@@ -117,20 +189,96 @@ func (h *ShipmentHandler) CreateShipment(c *gin.Context) {
 	}
 
 	params := &domain.CreateShipmentParams{
-		OrderNumber: req.OrderNumber,
-		WarehouseID: req.WarehouseID,
-		Items:       items,
-		Remark:      req.Remark,
-		OperatorID:  req.OperatorID,
+		OrderNumber:            req.OrderNumber,
+		SalesChannel:           req.SalesChannel,
+		WarehouseID:            req.WarehouseID,
+		DestinationWarehouseID: req.DestinationWarehouseID,
+		DestinationType:        req.DestinationType,
+		DestinationName:        req.DestinationName,
+		DestinationCode:        req.DestinationCode,
+		DestinationContact:     req.DestinationContact,
+		DestinationPhone:       req.DestinationPhone,
+		DestinationAddress:     req.DestinationAddress,
+		LogisticsProviderID:    req.LogisticsProviderID,
+		ShippingRateID:         req.ShippingRateID,
+		TransportMode:          req.TransportMode,
+		Carrier:                req.Carrier,
+		TrackingNumber:         req.TrackingNumber,
+		ExpectedDeliveryDate:   req.ExpectedDeliveryDate,
+		BoxCount:               req.BoxCount,
+		TotalWeight:            req.TotalWeight,
+		TotalVolume:            req.TotalVolume,
+		Items:                  items,
+		Remark:                 req.Remark,
+		InternalNotes:          req.InternalNotes,
+		OperatorID:             req.OperatorID,
 	}
 
 	shipment, err := h.usecase.Create(c, params)
 	if err != nil {
-		if errors.Is(err, usecase.ErrEmptyItems) {
-			response.BadRequest(c, err.Error())
-			return
-		}
-		response.InternalError(c, err.Error())
+		h.respondShipmentError(c, err)
+		return
+	}
+
+	response.Success(c, shipment)
+}
+
+// UpdateShipment 编辑发货单
+func (h *ShipmentHandler) UpdateShipment(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+
+	var req updateShipmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	items := make([]domain.CreateShipmentItemParams, 0, len(req.Items))
+	for _, item := range req.Items {
+		items = append(items, domain.CreateShipmentItemParams{
+			ProductID:       item.ProductID,
+			QuantityPlanned: item.QuantityPlanned,
+			PackageSpecID:   item.PackageSpecID,
+			BoxQuantity:     item.BoxQuantity,
+			UnitCost:        item.UnitCost,
+			Currency:        item.Currency,
+			Remark:          item.Remark,
+		})
+	}
+
+	params := &domain.UpdateShipmentParams{
+		OrderNumber:            req.OrderNumber,
+		SalesChannel:           req.SalesChannel,
+		WarehouseID:            req.WarehouseID,
+		DestinationWarehouseID: req.DestinationWarehouseID,
+		DestinationType:        req.DestinationType,
+		DestinationName:        req.DestinationName,
+		DestinationCode:        req.DestinationCode,
+		DestinationContact:     req.DestinationContact,
+		DestinationPhone:       req.DestinationPhone,
+		DestinationAddress:     req.DestinationAddress,
+		LogisticsProviderID:    req.LogisticsProviderID,
+		ShippingRateID:         req.ShippingRateID,
+		TransportMode:          req.TransportMode,
+		Carrier:                req.Carrier,
+		TrackingNumber:         req.TrackingNumber,
+		ExpectedDeliveryDate:   req.ExpectedDeliveryDate,
+		BoxCount:               req.BoxCount,
+		TotalWeight:            req.TotalWeight,
+		TotalVolume:            req.TotalVolume,
+		Items:                  items,
+		Remark:                 req.Remark,
+		InternalNotes:          req.InternalNotes,
+		OperatorID:             req.OperatorID,
+	}
+
+	shipment, err := h.usecase.Update(c, id, params)
+	if err != nil {
+		h.respondShipmentError(c, err)
 		return
 	}
 
@@ -158,7 +306,7 @@ func (h *ShipmentHandler) ConfirmShipment(c *gin.Context) {
 	}
 
 	if err := h.usecase.Confirm(c, id, params); err != nil {
-		response.InternalError(c, err.Error())
+		h.respondShipmentError(c, err)
 		return
 	}
 
@@ -200,7 +348,7 @@ func (h *ShipmentHandler) MarkShipmentShipped(c *gin.Context) {
 	}
 
 	if err := h.usecase.MarkShipped(c, id, params); err != nil {
-		response.InternalError(c, err.Error())
+		h.respondShipmentError(c, err)
 		return
 	}
 
@@ -234,7 +382,7 @@ func (h *ShipmentHandler) MarkShipmentDelivered(c *gin.Context) {
 	}
 
 	if err := h.usecase.MarkDelivered(c, id, params); err != nil {
-		response.InternalError(c, err.Error())
+		h.respondShipmentError(c, err)
 		return
 	}
 
@@ -267,7 +415,7 @@ func (h *ShipmentHandler) CancelShipment(c *gin.Context) {
 	}
 
 	if err := h.usecase.Cancel(c, id, params); err != nil {
-		response.InternalError(c, err.Error())
+		h.respondShipmentError(c, err)
 		return
 	}
 
@@ -283,7 +431,7 @@ func (h *ShipmentHandler) DeleteShipment(c *gin.Context) {
 	}
 
 	if err := h.usecase.Delete(c, id); err != nil {
-		response.InternalError(c, err.Error())
+		h.respondShipmentError(c, err)
 		return
 	}
 

@@ -5,14 +5,37 @@ type ProductRepository interface {
 	List(params *ProductListParams) ([]Product, int64, error)
 	GetByID(id uint64) (*Product, error)
 	ListByIDs(ids []uint64) ([]Product, error)
+	ListByParentID(parentID uint64) ([]Product, error)
+	CountReferencesByIDs(ids []uint64) (map[uint64]int64, error)
+	CountByConfigReference(configType ProductConfigType, configID uint64) (int64, error)
+	CountByCategoryID(categoryID uint64) (int64, error)
 	Create(product *Product) error
 	Update(product *Product) error
 	Delete(id uint64) error
+	UpdateParentIDBatch(productIDs []uint64, parentID *uint64) error
 	UpdateImageUrl(id uint64, imageUrl string) error
+	UpdateUnitCost(productID uint64, unitCost float64) error
 	GetDefaultSupplierID(productID uint64) (uint64, error)
 	UpdateDefaultSupplierID(productID, supplierID uint64) error
 	UpdateComboInfo(comboID uint64, mainProductID uint64, productIDs []uint64) error
 	ClearComboInfo(comboID uint64) error
+}
+
+type ProductConfigRepository interface {
+	List(params *ProductConfigListParams) ([]ProductConfigItem, int64, error)
+	GetByID(id uint64) (*ProductConfigItem, error)
+	Create(item *ProductConfigItem) error
+	Update(item *ProductConfigItem) error
+	Delete(id uint64) error
+}
+
+type ProductCategoryRepository interface {
+	ListAll() ([]ProductCategory, error)
+	GetByID(id uint64) (*ProductCategory, error)
+	Create(item *ProductCategory) error
+	Update(item *ProductCategory) error
+	Delete(id uint64) error
+	CountChildren(id uint64) (int64, error)
 }
 
 // ProductListParams 产品列表查询参数
@@ -22,10 +45,18 @@ type ProductListParams struct {
 	Keyword           string
 	Marketplace       string
 	Status            string
+	Statuses          []string
 	SupplierID        *uint64
+	BrandID           *uint64
+	CategoryID        *uint64
+	ParentID          *uint64
 	ComboID           *uint64
 	IsComboMain       *uint8
+	OnlyStandalone    bool
+	OnlyParentless    bool
+	OnlyWithPackaging bool
 	ExcludeComboChild bool    // 排除组合产品的子产品（只返回combo_id IS NULL的SKU，用于发货单选择）
+	PackingRequired   *uint8  // 是否需要打包
 	WarehouseID       *uint64 // 仓库ID，如果指定则只返回该仓库有库存的产品
 }
 
@@ -45,6 +76,15 @@ type ProductParentListParams struct {
 	Keyword     string
 	Marketplace string
 	Status      string
+	HasChildren string
+}
+
+type ProductConfigListParams struct {
+	Page       int
+	PageSize   int
+	Keyword    string
+	ConfigType ProductConfigType
+	Status     string
 }
 
 // ProductImageRepository 产品图片仓储接口
@@ -57,7 +97,6 @@ type ProductImageRepository interface {
 type ProductComboRepository interface {
 	ListComboIDs(params *ComboListParams) ([]uint64, int64, error)
 	GetItemsByComboID(comboID uint64) ([]ProductComboItem, error)
-	GetComboIDByMainProductID(mainProductID uint64) (uint64, error)
 	CreateCombo(mainProductID uint64, productIDs []uint64, qtyRatios map[uint64]uint64) (uint64, error)
 	ReplaceComboItems(comboID uint64, mainProductID uint64, productIDs []uint64, qtyRatios map[uint64]uint64) error
 	DeleteCombo(comboID uint64) error

@@ -7,6 +7,7 @@ type SupplierRepository interface {
 	Create(supplier *Supplier) error
 	Update(supplier *Supplier) error
 	Delete(id uint64) error
+	CountReferences(id uint64) (int64, error)
 }
 
 type SupplierTypeRepository interface {

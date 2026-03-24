@@ -21,6 +21,9 @@ type LogisticsService struct {
 	UpdatedBy         *uint64       `json:"updated_by" gorm:"column:updated_by"`
 	GmtCreate         time.Time     `json:"created_at" gorm:"column:gmt_create"`
 	GmtModified       time.Time     `json:"updated_at" gorm:"column:gmt_modified"`
+	ReferenceCount    int64         `json:"reference_count" gorm:"-"`
+	Deletable         bool          `json:"deletable" gorm:"-"`
+	DeleteBlockReason string        `json:"delete_block_reason,omitempty" gorm:"-"`
 }
 
 func (LogisticsService) TableName() string {
@@ -36,6 +39,7 @@ type LogisticsServiceRepository interface {
 	List(params *LogisticsServiceListParams) ([]*LogisticsService, int64, error)
 	GetActiveServices() ([]*LogisticsService, error)
 	GetServicesByTransportMode(transportMode TransportMode) ([]*LogisticsService, error)
+	CountReferences(id uint64) (int64, error)
 }
 
 type LogisticsServiceListParams struct {

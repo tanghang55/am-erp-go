@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"strconv"
 
 	"am-erp-go/internal/infrastructure/response"
@@ -126,6 +127,10 @@ func (h *ShippingRateHandler) DeleteShippingRate(c *gin.Context) {
 	}
 
 	if err := h.usecase.Delete(id); err != nil {
+		if errors.Is(err, usecase.ErrRateReferenced) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, err.Error())
 		return
 	}

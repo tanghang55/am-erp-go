@@ -1,0 +1,20 @@
+DELETE FROM `product_config_item`
+WHERE `config_type` = 'SALES_UNIT';
+
+ALTER TABLE `product`
+  DROP INDEX `idx_sales_unit_id`,
+  DROP COLUMN `sales_unit_id`;
+
+ALTER TABLE `product`
+  MODIFY COLUMN `status` enum('ACTIVE','INACTIVE','DISCONTINUED','DRAFT','ON_SALE','REPLENISHING','OFF_SHELF') NOT NULL DEFAULT 'DRAFT' COMMENT '销售状态';
+
+UPDATE `product`
+SET `status` = CASE `status`
+  WHEN 'ACTIVE' THEN 'ON_SALE'
+  WHEN 'INACTIVE' THEN 'DRAFT'
+  WHEN 'DISCONTINUED' THEN 'OFF_SHELF'
+  ELSE `status`
+END;
+
+ALTER TABLE `product`
+  MODIFY COLUMN `status` enum('DRAFT','ON_SALE','REPLENISHING','OFF_SHELF') NOT NULL DEFAULT 'DRAFT' COMMENT '销售状态';

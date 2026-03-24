@@ -61,7 +61,12 @@ func (r *packageSpecRepository) List(params *domain.PackageSpecListParams) ([]*d
 }
 
 func (r *packageSpecRepository) Delete(id uint64) error {
-	return r.db.Delete(&domain.PackageSpec{}, id).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("package_spec_id = ?", id).Delete(&domain.PackageSpecPackagingItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&domain.PackageSpec{}, id).Error
+	})
 }
 
 func (r *packageSpecRepository) ListByIDs(ids []uint64) ([]*domain.PackageSpec, error) {
@@ -74,4 +79,12 @@ func (r *packageSpecRepository) ListByIDs(ids []uint64) ([]*domain.PackageSpec, 
 		return nil, err
 	}
 	return specs, nil
+}
+
+func (r *packageSpecRepository) CountReferences(id uint64) (int64, error) {
+	var count int64
+	if err := r.db.Table("shipment_item").Where("package_spec_id = ?", id).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }

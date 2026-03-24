@@ -27,9 +27,9 @@ func (h *InventoryHandler) ListMovements(c *gin.Context) {
 		PageSize: parseIntOrDefault(c.Query("page_size"), 20),
 	}
 
-	if skuID := c.Query("sku_id"); skuID != "" {
-		if id, err := strconv.ParseUint(skuID, 10, 64); err == nil {
-			params.SkuID = &id
+	if productID := c.Query("product_id"); productID != "" {
+		if id, err := strconv.ParseUint(productID, 10, 64); err == nil {
+			params.ProductID = &id
 		}
 	}
 
@@ -79,7 +79,7 @@ func (h *InventoryHandler) GetMovement(c *gin.Context) {
 }
 
 type createMovementRequest struct {
-	SkuID           uint64   `json:"sku_id" binding:"required"`
+	ProductID       uint64   `json:"product_id" binding:"required"`
 	WarehouseID     uint64   `json:"warehouse_id" binding:"required"`
 	Quantity        int      `json:"quantity" binding:"required"`
 	ReferenceType   *string  `json:"reference_type"`
@@ -89,16 +89,6 @@ type createMovementRequest struct {
 	Remark          *string  `json:"remark"`
 	OperatorID      *uint64  `json:"operator_id"`
 	OperatedAt      *string  `json:"operated_at"`
-}
-
-// CreatePurchaseReceipt 采购入库
-func (h *InventoryHandler) CreatePurchaseReceipt(c *gin.Context) {
-	h.createMovement(c, domain.MovementTypePurchaseReceipt)
-}
-
-// CreateSalesShipment 销售出库
-func (h *InventoryHandler) CreateSalesShipment(c *gin.Context) {
-	h.createMovement(c, domain.MovementTypeSalesShipment)
 }
 
 // CreateStockTakeAdjustment 盘点调整
@@ -114,11 +104,6 @@ func (h *InventoryHandler) CreateManualAdjustment(c *gin.Context) {
 // CreateDamageWriteOff 损坏报损
 func (h *InventoryHandler) CreateDamageWriteOff(c *gin.Context) {
 	h.createMovement(c, domain.MovementTypeDamageWriteOff)
-}
-
-// CreateReturnReceipt 退货入库
-func (h *InventoryHandler) CreateReturnReceipt(c *gin.Context) {
-	h.createMovement(c, domain.MovementTypeReturnReceipt)
 }
 
 func (h *InventoryHandler) createMovement(c *gin.Context, movementType domain.MovementType) {
@@ -139,7 +124,7 @@ func (h *InventoryHandler) createMovement(c *gin.Context, movementType domain.Mo
 	}
 
 	params := &domain.CreateMovementParams{
-		SkuID:           req.SkuID,
+		ProductID:       req.ProductID,
 		WarehouseID:     req.WarehouseID,
 		MovementType:    movementType,
 		Quantity:        req.Quantity,
@@ -170,7 +155,7 @@ func (h *InventoryHandler) createMovement(c *gin.Context, movementType domain.Mo
 }
 
 type transferRequest struct {
-	SkuID           uint64   `json:"sku_id" binding:"required"`
+	ProductID       uint64   `json:"product_id" binding:"required"`
 	FromWarehouseID uint64   `json:"from_warehouse_id" binding:"required"`
 	ToWarehouseID   uint64   `json:"to_warehouse_id" binding:"required"`
 	Quantity        uint     `json:"quantity" binding:"required"`
@@ -190,7 +175,7 @@ func (h *InventoryHandler) CreateTransfer(c *gin.Context) {
 	}
 
 	params := &domain.TransferParams{
-		SkuID:           req.SkuID,
+		ProductID:       req.ProductID,
 		FromWarehouseID: req.FromWarehouseID,
 		ToWarehouseID:   req.ToWarehouseID,
 		Quantity:        req.Quantity,
@@ -230,9 +215,9 @@ func (h *InventoryHandler) ListBalances(c *gin.Context) {
 		}
 	}
 
-	if skuID := c.Query("sku_id"); skuID != "" {
-		if id, err := strconv.ParseUint(skuID, 10, 64); err == nil {
-			params.SkuID = &id
+	if productID := c.Query("product_id"); productID != "" {
+		if id, err := strconv.ParseUint(productID, 10, 64); err == nil {
+			params.ProductID = &id
 		}
 	}
 
@@ -266,14 +251,51 @@ func (h *InventoryHandler) ListBalances(c *gin.Context) {
 	response.SuccessPage(c, balances, total, params.Page, params.PageSize)
 }
 
-// GetSkuBalance 获取SKU在指定仓库的库存
-func (h *InventoryHandler) GetSkuBalance(c *gin.Context) {
-	skuIDStr := c.Param("sku_id")
+// ListLots 获取库存批次列表
+func (h *InventoryHandler) ListLots(c *gin.Context) {
+	params := &domain.InventoryLotListParams{
+		Page:     parseIntOrDefault(c.Query("page"), 1),
+		PageSize: parseIntOrDefault(c.Query("page_size"), 20),
+	}
+
+	if warehouseID := c.Query("warehouse_id"); warehouseID != "" {
+		if id, err := strconv.ParseUint(warehouseID, 10, 64); err == nil {
+			params.WarehouseID = &id
+		}
+	}
+
+	if productID := c.Query("product_id"); productID != "" {
+		if id, err := strconv.ParseUint(productID, 10, 64); err == nil {
+			params.ProductID = &id
+		}
+	}
+
+	if status := c.Query("status"); status != "" {
+		lotStatus := domain.InventoryLotStatus(status)
+		params.Status = &lotStatus
+	}
+
+	if keyword := c.Query("keyword"); keyword != "" {
+		params.Keyword = &keyword
+	}
+
+	lots, total, err := h.usecase.ListLots(params)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+
+	response.SuccessPage(c, lots, total, params.Page, params.PageSize)
+}
+
+// GetProductBalance 获取产品在指定仓库的库存
+func (h *InventoryHandler) GetProductBalance(c *gin.Context) {
+	productIDStr := c.Param("product_id")
 	warehouseIDStr := c.Param("warehouse_id")
 
-	skuID, err := strconv.ParseUint(skuIDStr, 10, 64)
+	productID, err := strconv.ParseUint(productIDStr, 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid sku_id")
+		response.BadRequest(c, "invalid product_id")
 		return
 	}
 
@@ -283,7 +305,7 @@ func (h *InventoryHandler) GetSkuBalance(c *gin.Context) {
 		return
 	}
 
-	balance, err := h.usecase.GetSkuBalance(skuID, warehouseID)
+	balance, err := h.usecase.GetProductBalance(productID, warehouseID)
 	if err != nil {
 		response.NotFound(c, "balance not found")
 		return
@@ -302,7 +324,7 @@ func parseIntOrDefault(s string, defaultVal int) int {
 // ==================== 库存状态流转API ====================
 
 type stockTransitionRequest struct {
-	SkuID           uint64   `json:"sku_id" binding:"required"`
+	ProductID       uint64   `json:"product_id" binding:"required"`
 	WarehouseID     uint64   `json:"warehouse_id" binding:"required"`
 	Quantity        uint     `json:"quantity" binding:"required"`
 	UnitCost        *float64 `json:"unit_cost"`
@@ -313,34 +335,9 @@ type stockTransitionRequest struct {
 	ReferenceNumber *string  `json:"reference_number"`
 }
 
-// CreatePurchaseShip 供应商发货 → 采购在途
-func (h *InventoryHandler) CreatePurchaseShip(c *gin.Context) {
-	h.createStockTransition(c, domain.MovementTypePurchaseShip)
-}
-
-// CreateWarehouseReceive 到仓收货: 采购在途 → 待检
-func (h *InventoryHandler) CreateWarehouseReceive(c *gin.Context) {
-	h.createStockTransition(c, domain.MovementTypeWarehouseReceive)
-}
-
-// CreateInspectionPass 质检通过: 待检 → 原料库存
-func (h *InventoryHandler) CreateInspectionPass(c *gin.Context) {
-	h.createStockTransition(c, domain.MovementTypeInspectionPass)
-}
-
-// CreateInspectionFail 质检不合格: 待检 → 损坏
-func (h *InventoryHandler) CreateInspectionFail(c *gin.Context) {
-	h.createStockTransition(c, domain.MovementTypeInspectionFail)
-}
-
 // CreateAssemblyComplete 组装完成: 原料库存 → 待出库存
 func (h *InventoryHandler) CreateAssemblyComplete(c *gin.Context) {
 	h.createStockTransition(c, domain.MovementTypeAssemblyComplete)
-}
-
-// CreateLogisticsShip 物流发货: 待出库存 → 物流在途
-func (h *InventoryHandler) CreateLogisticsShip(c *gin.Context) {
-	h.createStockTransition(c, domain.MovementTypeLogisticsShip)
 }
 
 // CreatePlatformReceive 平台上架: 物流在途 → 可售库存
@@ -354,9 +351,12 @@ func (h *InventoryHandler) createStockTransition(c *gin.Context, movementType do
 		response.BadRequest(c, err.Error())
 		return
 	}
+	if req.OperatorID == nil {
+		req.OperatorID = getUserIDFromContext(c)
+	}
 
 	params := &domain.CreateMovementParams{
-		SkuID:           req.SkuID,
+		ProductID:       req.ProductID,
 		WarehouseID:     req.WarehouseID,
 		MovementType:    movementType,
 		Quantity:        int(req.Quantity),
@@ -377,86 +377,11 @@ func (h *InventoryHandler) createStockTransition(c *gin.Context, movementType do
 	response.Success(c, movement)
 }
 
-type returnReceiveRequest struct {
-	SkuID           uint64   `json:"sku_id" binding:"required"`
-	WarehouseID     uint64   `json:"warehouse_id" binding:"required"`
-	Quantity        uint     `json:"quantity" binding:"required"`
-	UnitCost        *float64 `json:"unit_cost"`
-	Remark          *string  `json:"remark"`
-	OperatorID      *uint64  `json:"operator_id"`
-	ReferenceType   *string  `json:"reference_type"`
-	ReferenceID     *uint64  `json:"reference_id"`
-	ReferenceNumber *string  `json:"reference_number"`
-}
-
-// CreateReturnReceive 退货入库 → 退货库存
-func (h *InventoryHandler) CreateReturnReceive(c *gin.Context) {
-	var req returnReceiveRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
-		return
+func getUserIDFromContext(c *gin.Context) *uint64 {
+	if userID, exists := c.Get("userID"); exists {
+		if id, ok := userID.(uint64); ok {
+			return &id
+		}
 	}
-
-	params := &domain.StockTransitionParams{
-		SkuID:           req.SkuID,
-		WarehouseID:     req.WarehouseID,
-		Quantity:        req.Quantity,
-		UnitCost:        req.UnitCost,
-		Remark:          req.Remark,
-		OperatorID:      req.OperatorID,
-		ReferenceType:   req.ReferenceType,
-		ReferenceID:     req.ReferenceID,
-		ReferenceNumber: req.ReferenceNumber,
-	}
-
-	movement, err := h.usecase.RecordReturnReceive(c, params)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-
-	response.Success(c, movement)
-}
-
-type returnInspectRequest struct {
-	SkuID           uint64  `json:"sku_id" binding:"required"`
-	WarehouseID     uint64  `json:"warehouse_id" binding:"required"`
-	PassQuantity    uint    `json:"pass_quantity"`
-	FailQuantity    uint    `json:"fail_quantity"`
-	Remark          *string `json:"remark"`
-	OperatorID      *uint64 `json:"operator_id"`
-	ReferenceType   *string `json:"reference_type"`
-	ReferenceNumber *string `json:"reference_number"`
-}
-
-// CreateReturnInspect 退货质检: 退货库存 → 待检/损坏
-func (h *InventoryHandler) CreateReturnInspect(c *gin.Context) {
-	var req returnInspectRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-
-	if req.PassQuantity == 0 && req.FailQuantity == 0 {
-		response.BadRequest(c, "pass_quantity or fail_quantity is required")
-		return
-	}
-
-	params := &domain.ReturnInspectParams{
-		SkuID:           req.SkuID,
-		WarehouseID:     req.WarehouseID,
-		PassQuantity:    req.PassQuantity,
-		FailQuantity:    req.FailQuantity,
-		Remark:          req.Remark,
-		OperatorID:      req.OperatorID,
-		ReferenceType:   req.ReferenceType,
-		ReferenceNumber: req.ReferenceNumber,
-	}
-
-	if err := h.usecase.ReturnInspect(c, params); err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-
-	response.Success(c, nil)
+	return nil
 }

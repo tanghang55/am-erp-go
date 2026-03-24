@@ -1,0 +1,28 @@
+{
+  "providers": [
+    {
+      "code": "AMAZON_US",
+      "type": "amazon",
+      "enabled": false,
+      "auto_sync_enabled": false,
+      "channel": "SP_API_SELF",
+      "source_type": "AMAZON_API",
+      "sales_channel": "AMAZON",
+      "default_currency": "USD",
+      "sync_interval_minutes": 30,
+      "lookback_minutes": 10,
+      "initial_lookback_days": 7,
+      "request_timeout_seconds": 20,
+      "amazon": {
+        "endpoint": "https://sellingpartnerapi-na.amazon.com",
+        "app_id": "",
+        "oauth_authorize_base_url": "https://sellercentral.amazon.com/apps/authorize/consent",
+        "oauth_redirect_uri": "http://localhost:8080/api/v1/integrations/providers/AMAZON_US/oauth/callback",
+        "marketplace_ids": ["ATVPDKIKX0DER"],
+        "lwa_client_id": "",
+        "lwa_client_secret": "",
+        "lwa_refresh_token": ""
+      }
+    }
+  ]
+}

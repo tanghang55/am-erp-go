@@ -31,7 +31,7 @@ func TestListAuditLogsParsesQuery(t *testing.T) {
 	router.GET("/api/v1/system/logs", handler.List)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/logs?page=2&page_size=10&module=Product&action=UPDATE&username=demo&entity_type=SKU&entity_id=1&keyword=abc&date_from=2026-01-01&date_to=2026-01-02", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/logs?page=2&page_size=10&module=Product&action=UPDATE&username=demo&entity_type=Product&entity_id=1&keyword=abc&date_from=2026-01-01&date_to=2026-01-02", nil)
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {

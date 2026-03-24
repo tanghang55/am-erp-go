@@ -2,11 +2,14 @@ package usecase
 
 import (
 	"am-erp-go/internal/module/shipment/domain"
+	"errors"
 )
 
+var ErrPackageSpecReferenced = errors.New("package spec is still referenced by shipment items")
+
 type PackageSpecUseCase struct {
-	repo           domain.PackageSpecRepository
-	packagingRepo  domain.PackageSpecPackagingRepository
+	repo          domain.PackageSpecRepository
+	packagingRepo domain.PackageSpecPackagingRepository
 }
 
 func NewPackageSpecUseCase(
@@ -83,14 +86,51 @@ func (uc *PackageSpecUseCase) Update(id uint64, params *domain.UpdatePackageSpec
 }
 
 func (uc *PackageSpecUseCase) GetByID(id uint64) (*domain.PackageSpec, error) {
-	return uc.repo.GetByID(id)
+	spec, err := uc.repo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	spec.Deletable = true
+	refCount, err := uc.repo.CountReferences(id)
+	if err != nil {
+		return nil, err
+	}
+	spec.ReferenceCount = refCount
+	if refCount > 0 {
+		spec.Deletable = false
+		spec.DeleteBlockReason = "已被发货明细引用，不可删除"
+	}
+	return spec, nil
 }
 
 func (uc *PackageSpecUseCase) List(params *domain.PackageSpecListParams) ([]*domain.PackageSpec, int64, error) {
-	return uc.repo.List(params)
+	specs, total, err := uc.repo.List(params)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, spec := range specs {
+		spec.Deletable = true
+		refCount, err := uc.repo.CountReferences(spec.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		spec.ReferenceCount = refCount
+		if refCount > 0 {
+			spec.Deletable = false
+			spec.DeleteBlockReason = "已被发货明细引用，不可删除"
+		}
+	}
+	return specs, total, nil
 }
 
 func (uc *PackageSpecUseCase) Delete(id uint64) error {
+	refCount, err := uc.repo.CountReferences(id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrPackageSpecReferenced
+	}
 	return uc.repo.Delete(id)
 }
 

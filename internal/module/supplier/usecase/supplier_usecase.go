@@ -1,6 +1,15 @@
 package usecase
 
-import "am-erp-go/internal/module/supplier/domain"
+import (
+	"errors"
+	"strings"
+
+	"am-erp-go/internal/infrastructure/validation"
+	"am-erp-go/internal/module/supplier/domain"
+)
+
+var ErrSupplierCodeInvalid = errors.New("supplier code only supports letters, numbers, hyphen and underscore")
+var ErrSupplierReferenced = errors.New("supplier is still referenced by business data")
 
 type SupplierUsecase struct {
 	supplierRepo        domain.SupplierRepository
@@ -46,6 +55,16 @@ func (uc *SupplierUsecase) ListSuppliers(params *domain.SupplierListParams) ([]d
 	}
 	items := make([]domain.SupplierListItem, 0, len(suppliers))
 	for _, supplier := range suppliers {
+		supplier.Deletable = true
+		refCount, err := uc.supplierRepo.CountReferences(supplier.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		supplier.ReferenceCount = refCount
+		if refCount > 0 {
+			supplier.Deletable = false
+			supplier.DeleteBlockReason = "已被业务数据引用，不可删除"
+		}
 		items = append(items, domain.SupplierListItem{
 			Supplier: supplier,
 			Types:    typeMap[supplier.ID],
@@ -58,6 +77,16 @@ func (uc *SupplierUsecase) GetSupplier(id uint64) (*domain.SupplierDetail, error
 	supplier, err := uc.supplierRepo.GetByID(id)
 	if err != nil {
 		return nil, err
+	}
+	supplier.Deletable = true
+	refCount, err := uc.supplierRepo.CountReferences(id)
+	if err != nil {
+		return nil, err
+	}
+	supplier.ReferenceCount = refCount
+	if refCount > 0 {
+		supplier.Deletable = false
+		supplier.DeleteBlockReason = "已被业务数据引用，不可删除"
 	}
 	types, err := uc.getSupplierTypes(id)
 	if err != nil {
@@ -85,6 +114,9 @@ func (uc *SupplierUsecase) GetSupplier(id uint64) (*domain.SupplierDetail, error
 }
 
 func (uc *SupplierUsecase) CreateSupplier(supplier *domain.Supplier, types []string) (*domain.SupplierDetail, error) {
+	if !validation.IsValidCode(strings.TrimSpace(supplier.SupplierCode)) {
+		return nil, ErrSupplierCodeInvalid
+	}
 	if err := uc.supplierRepo.Create(supplier); err != nil {
 		return nil, err
 	}
@@ -103,6 +135,9 @@ func (uc *SupplierUsecase) CreateSupplier(supplier *domain.Supplier, types []str
 }
 
 func (uc *SupplierUsecase) UpdateSupplier(supplier *domain.Supplier, types []string) (*domain.SupplierDetail, error) {
+	if !validation.IsValidCode(strings.TrimSpace(supplier.SupplierCode)) {
+		return nil, ErrSupplierCodeInvalid
+	}
 	if err := uc.supplierRepo.Update(supplier); err != nil {
 		return nil, err
 	}
@@ -115,6 +150,13 @@ func (uc *SupplierUsecase) UpdateSupplier(supplier *domain.Supplier, types []str
 }
 
 func (uc *SupplierUsecase) DeleteSupplier(id uint64) error {
+	refCount, err := uc.supplierRepo.CountReferences(id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrSupplierReferenced
+	}
 	return uc.supplierRepo.Delete(id)
 }
 

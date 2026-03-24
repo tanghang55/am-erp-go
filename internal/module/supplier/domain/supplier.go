@@ -4,13 +4,16 @@ import "time"
 
 // Supplier represents a supplier profile.
 type Supplier struct {
-	ID           uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
-	SupplierCode string    `json:"supplier_code" gorm:"column:supplier_code;size:50;not null"`
-	Name         string    `json:"name" gorm:"size:200;not null"`
-	Status       string    `json:"status" gorm:"size:20;default:'ACTIVE'"`
-	Remark       string    `json:"remark" gorm:"type:text"`
-	GmtCreate    time.Time `json:"gmt_create" gorm:"column:gmt_create;autoCreateTime"`
-	GmtModified  time.Time `json:"gmt_modified" gorm:"column:gmt_modified;autoUpdateTime"`
+	ID                uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
+	SupplierCode      string    `json:"supplier_code" gorm:"column:supplier_code;size:50;not null"`
+	Name              string    `json:"name" gorm:"size:200;not null"`
+	Status            string    `json:"status" gorm:"size:20;default:'ACTIVE'"`
+	Remark            string    `json:"remark" gorm:"type:text"`
+	GmtCreate         time.Time `json:"gmt_create" gorm:"column:gmt_create;autoCreateTime"`
+	GmtModified       time.Time `json:"gmt_modified" gorm:"column:gmt_modified;autoUpdateTime"`
+	ReferenceCount    int64     `json:"reference_count" gorm:"-"`
+	Deletable         bool      `json:"deletable" gorm:"-"`
+	DeleteBlockReason string    `json:"delete_block_reason,omitempty" gorm:"-"`
 }
 
 func (Supplier) TableName() string {

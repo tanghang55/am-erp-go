@@ -3,6 +3,7 @@ package domain
 import "time"
 
 type ShipmentStatus string
+type ShipmentReceiptStatus string
 
 const (
 	ShipmentStatusDraft     ShipmentStatus = "DRAFT"     // 草稿
@@ -10,6 +11,12 @@ const (
 	ShipmentStatusShipped   ShipmentStatus = "SHIPPED"   // 已发货(库存已扣减到在途)
 	ShipmentStatusDelivered ShipmentStatus = "DELIVERED" // 已送达
 	ShipmentStatusCancelled ShipmentStatus = "CANCELLED" // 已取消
+)
+
+const (
+	ShipmentReceiptStatusPending   ShipmentReceiptStatus = "PENDING"
+	ShipmentReceiptStatusPartial   ShipmentReceiptStatus = "PARTIAL"
+	ShipmentReceiptStatusCompleted ShipmentReceiptStatus = "COMPLETED"
 )
 
 type DestinationType string
@@ -23,15 +30,15 @@ const (
 )
 
 type Shipment struct {
-	ID             uint64         `json:"id" gorm:"primaryKey;autoIncrement"`
-	ShipmentNumber string         `json:"shipment_number" gorm:"column:shipment_number;size:50;uniqueIndex;not null"`
+	ID             uint64 `json:"id" gorm:"primaryKey;autoIncrement"`
+	ShipmentNumber string `json:"shipment_number" gorm:"column:shipment_number;size:50;uniqueIndex;not null"`
 
 	// 订单信息（通用）
-	OrderNumber    *string        `json:"order_number" gorm:"column:order_number;size:100;index"`
-	SalesChannel   *string        `json:"sales_channel" gorm:"column:sales_channel;size:50"`
+	OrderNumber  *string `json:"order_number" gorm:"column:order_number;size:100;index"`
+	SalesChannel *string `json:"sales_channel" gorm:"column:sales_channel;size:50"`
 
 	// 发货仓库
-	WarehouseID    uint64         `json:"warehouse_id" gorm:"column:warehouse_id;not null;index"`
+	WarehouseID uint64 `json:"warehouse_id" gorm:"column:warehouse_id;not null;index"`
 
 	// 目的地仓库（新增）
 	DestinationWarehouseID *uint64 `json:"destination_warehouse_id" gorm:"column:destination_warehouse_id;index"`
@@ -54,9 +61,9 @@ type Shipment struct {
 	TransportMode *string `json:"transport_mode" gorm:"column:transport_mode;type:enum('EXPRESS','AIR','SEA','RAIL','TRUCK');index"`
 
 	// 物流信息（通用）
-	Carrier        *string        `json:"carrier" gorm:"column:carrier;size:50"`
-	ShippingMethod *string        `json:"shipping_method" gorm:"column:shipping_method;size:50"`
-	TrackingNumber *string        `json:"tracking_number" gorm:"column:tracking_number;size:200;index"`
+	Carrier        *string `json:"carrier" gorm:"column:carrier;size:50"`
+	ShippingMethod *string `json:"shipping_method" gorm:"column:shipping_method;size:50"`
+	TrackingNumber *string `json:"tracking_number" gorm:"column:tracking_number;size:200;index"`
 
 	// 包装信息
 	BoxCount    uint    `json:"box_count" gorm:"column:box_count;default:0"`
@@ -64,16 +71,25 @@ type Shipment struct {
 	TotalVolume float64 `json:"total_volume" gorm:"column:total_volume;type:decimal(10,3);default:0"`
 
 	// 费用
-	ShippingCost float64 `json:"shipping_cost" gorm:"column:shipping_cost;type:decimal(12,4);default:0"`
-	Currency     string  `json:"currency" gorm:"column:currency;size:10;default:'USD'"`
+	ShippingCost           float64    `json:"shipping_cost" gorm:"column:shipping_cost;type:decimal(12,4);default:0"`
+	Currency               string     `json:"currency" gorm:"column:currency;size:10"`
+	BaseCurrency           string     `json:"base_currency" gorm:"column:base_currency;size:10"`
+	ShippingCostBaseAmount float64    `json:"shipping_cost_base_amount" gorm:"column:shipping_cost_base_amount;type:decimal(18,6);default:0"`
+	ShippingCostFxRate     float64    `json:"shipping_cost_fx_rate" gorm:"column:shipping_cost_fx_rate;type:decimal(18,8);default:0"`
+	ShippingCostFxSource   string     `json:"shipping_cost_fx_source" gorm:"column:shipping_cost_fx_source;size:50"`
+	ShippingCostFxVersion  string     `json:"shipping_cost_fx_version" gorm:"column:shipping_cost_fx_version;size:32"`
+	ShippingCostFxTime     *time.Time `json:"shipping_cost_fx_time" gorm:"column:shipping_cost_fx_time"`
 
 	// 时间节点
-	ShipDate             *string    `json:"ship_date" gorm:"column:ship_date;type:date"`
-	ExpectedDeliveryDate *string    `json:"expected_delivery_date" gorm:"column:expected_delivery_date;type:date"`
-	ActualDeliveryDate   *string    `json:"actual_delivery_date" gorm:"column:actual_delivery_date;type:date"`
+	ShipDate             *string `json:"ship_date" gorm:"column:ship_date;type:date"`
+	ExpectedDeliveryDate *string `json:"expected_delivery_date" gorm:"column:expected_delivery_date;type:date"`
+	ActualDeliveryDate   *string `json:"actual_delivery_date" gorm:"column:actual_delivery_date;type:date"`
 
 	// 状态
-	Status ShipmentStatus `json:"status" gorm:"column:status;type:enum('DRAFT','CONFIRMED','SHIPPED','DELIVERED','CANCELLED');default:'DRAFT';index"`
+	Status             ShipmentStatus        `json:"status" gorm:"column:status;type:enum('DRAFT','CONFIRMED','SHIPPED','DELIVERED','CANCELLED');default:'DRAFT';index"`
+	ReceiptStatus      ShipmentReceiptStatus `json:"receipt_status" gorm:"column:receipt_status;type:enum('PENDING','PARTIAL','COMPLETED');not null;default:'PENDING';index"`
+	ReceiptCompletedAt *time.Time            `json:"receipt_completed_at" gorm:"column:receipt_completed_at;index"`
+	ReceiptCompletedBy *uint64               `json:"receipt_completed_by" gorm:"column:receipt_completed_by"`
 
 	// 详细时间节点（新增）
 	ConfirmedAt *time.Time `json:"confirmed_at" gorm:"column:confirmed_at;index"`
@@ -81,9 +97,9 @@ type Shipment struct {
 	DeliveredAt *time.Time `json:"delivered_at" gorm:"column:delivered_at;index"`
 
 	// 操作人记录（新增）
-	ConfirmedBy  *uint64 `json:"confirmed_by" gorm:"column:confirmed_by"`
-	ShippedBy    *uint64 `json:"shipped_by" gorm:"column:shipped_by"`
-	DeliveredBy  *uint64 `json:"delivered_by" gorm:"column:delivered_by"`
+	ConfirmedBy *uint64 `json:"confirmed_by" gorm:"column:confirmed_by"`
+	ShippedBy   *uint64 `json:"shipped_by" gorm:"column:shipped_by"`
+	DeliveredBy *uint64 `json:"delivered_by" gorm:"column:delivered_by"`
 
 	// 库存标记
 	InventoryLocked   bool `json:"inventory_locked" gorm:"column:inventory_locked;default:0"`
@@ -99,6 +115,12 @@ type Shipment struct {
 	GmtCreate   time.Time `json:"created_at" gorm:"column:gmt_create;autoCreateTime"`
 	GmtModified time.Time `json:"updated_at" gorm:"column:gmt_modified;autoUpdateTime"`
 
+	CreatedByName          string `json:"created_by_name,omitempty" gorm:"-"`
+	ConfirmedByName        string `json:"confirmed_by_name,omitempty" gorm:"-"`
+	ShippedByName          string `json:"shipped_by_name,omitempty" gorm:"-"`
+	DeliveredByName        string `json:"delivered_by_name,omitempty" gorm:"-"`
+	ReceiptCompletedByName string `json:"receipt_completed_by_name,omitempty" gorm:"-"`
+
 	// Relations
 	Items                []ShipmentItem `json:"items,omitempty" gorm:"-"`
 	Warehouse            interface{}    `json:"warehouse,omitempty" gorm:"-"`             // 发货仓库信息
@@ -112,31 +134,32 @@ func (Shipment) TableName() string {
 }
 
 type ShipmentItem struct {
-	ID               uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
-	ShipmentID       uint64    `json:"shipment_id" gorm:"column:shipment_id;not null;index"`
-	SkuID            uint64    `json:"sku_id" gorm:"column:sku_id;not null;index"`
+	ID         uint64 `json:"id" gorm:"primaryKey;autoIncrement"`
+	ShipmentID uint64 `json:"shipment_id" gorm:"column:shipment_id;not null;index"`
+	ProductID  uint64 `json:"product_id" gorm:"column:product_id;not null;index"`
 
 	// 数量
-	QuantityPlanned  uint      `json:"quantity_planned" gorm:"column:quantity_planned;not null"`
-	QuantityShipped  uint      `json:"quantity_shipped" gorm:"column:quantity_shipped;default:0"`
+	QuantityPlanned  uint `json:"quantity_planned" gorm:"column:quantity_planned;not null"`
+	QuantityShipped  uint `json:"quantity_shipped" gorm:"column:quantity_shipped;default:0"`
+	QuantityReceived uint `json:"quantity_received" gorm:"column:quantity_received;default:0"`
 
 	// 装箱信息
-	PackageSpecID    *uint64   `json:"package_spec_id" gorm:"column:package_spec_id;index"`
-	BoxQuantity      uint      `json:"box_quantity" gorm:"column:box_quantity;default:0"` // 装箱数量
+	PackageSpecID *uint64 `json:"package_spec_id" gorm:"column:package_spec_id;index"`
+	BoxQuantity   uint    `json:"box_quantity" gorm:"column:box_quantity;default:0"` // 装箱数量
 
 	// 成本（保留字段，前端可不展示）
-	UnitCost         float64   `json:"unit_cost" gorm:"column:unit_cost;type:decimal(12,4);default:0"`
-	Currency         string    `json:"currency" gorm:"column:currency;size:10;default:'USD'"`
+	UnitCost float64 `json:"unit_cost" gorm:"column:unit_cost;type:decimal(12,4);default:0"`
+	Currency string  `json:"currency" gorm:"column:currency;size:10"`
 
 	// 备注
-	Remark           *string   `json:"remark" gorm:"column:remark;size:500"`
+	Remark *string `json:"remark" gorm:"column:remark;size:500"`
 
-	GmtCreate        time.Time `json:"created_at" gorm:"column:gmt_create;autoCreateTime"`
-	GmtModified      time.Time `json:"updated_at" gorm:"column:gmt_modified;autoUpdateTime"`
+	GmtCreate   time.Time `json:"created_at" gorm:"column:gmt_create;autoCreateTime"`
+	GmtModified time.Time `json:"updated_at" gorm:"column:gmt_modified;autoUpdateTime"`
 
 	// Relations (not stored in DB)
-	Sku              interface{}  `json:"sku,omitempty" gorm:"-"`         // 产品信息
-	PackageSpec      *PackageSpec `json:"package_spec,omitempty" gorm:"-"` // 装箱规格
+	Product     interface{}  `json:"product,omitempty" gorm:"-"`      // 产品信息
+	PackageSpec *PackageSpec `json:"package_spec,omitempty" gorm:"-"` // 装箱规格
 }
 
 func (ShipmentItem) TableName() string {
@@ -158,15 +181,67 @@ type ShipmentListParams struct {
 }
 
 type CreateShipmentParams struct {
-	OrderNumber *string
-	WarehouseID uint64
-	Items       []CreateShipmentItemParams
-	Remark      *string
-	OperatorID  *uint64
+	OrderNumber  *string
+	SalesChannel *string
+	WarehouseID  uint64
+
+	DestinationWarehouseID *uint64
+	DestinationType        *DestinationType
+	DestinationName        *string
+	DestinationCode        *string
+	DestinationContact     *string
+	DestinationPhone       *string
+	DestinationAddress     *string
+
+	LogisticsProviderID  *uint64
+	ShippingRateID       *uint64
+	TransportMode        *string
+	Carrier              *string
+	TrackingNumber       *string
+	ExpectedDeliveryDate *string
+
+	BoxCount    *uint
+	TotalWeight *float64
+	TotalVolume *float64
+
+	Items         []CreateShipmentItemParams
+	Remark        *string
+	InternalNotes *string
+	OperatorID    *uint64
+}
+
+type UpdateShipmentParams struct {
+	OrderNumber  *string
+	SalesChannel *string
+	WarehouseID  *uint64
+
+	DestinationWarehouseID *uint64
+	DestinationType        *DestinationType
+	DestinationName        *string
+	DestinationCode        *string
+	DestinationContact     *string
+	DestinationPhone       *string
+	DestinationAddress     *string
+
+	LogisticsProviderID  *uint64
+	ShippingRateID       *uint64
+	TransportMode        *string
+	Carrier              *string
+	TrackingNumber       *string
+	ExpectedDeliveryDate *string
+
+	BoxCount    *uint
+	TotalWeight *float64
+	TotalVolume *float64
+
+	Items         []CreateShipmentItemParams
+	Remark        *string
+	InternalNotes *string
+	OperatorID    *uint64
 }
 
 type CreateShipmentItemParams struct {
-	SkuID           uint64
+	ProductID       uint64
 	QuantityPlanned uint
 	PackageSpecID   *uint64
 	BoxQuantity     *uint
@@ -213,6 +288,7 @@ type ShipmentRepository interface {
 type ShipmentItemRepository interface {
 	Create(item *ShipmentItem) error
 	CreateBatch(items []ShipmentItem) error
+	UpdateBatch(items []ShipmentItem) error
 	GetByShipmentID(shipmentID uint64) ([]ShipmentItem, error)
 	DeleteByShipmentID(shipmentID uint64) error
 }

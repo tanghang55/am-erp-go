@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"strconv"
 
 	"am-erp-go/internal/infrastructure/response"
@@ -78,6 +79,10 @@ func (h *WarehouseHandler) CreateWarehouse(c *gin.Context) {
 
 	warehouse, err := h.usecase.CreateWarehouse(c, &req)
 	if err != nil {
+		if errors.Is(err, usecase.ErrWarehouseCodeInvalid) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -101,6 +106,10 @@ func (h *WarehouseHandler) UpdateWarehouse(c *gin.Context) {
 
 	warehouse, err := h.usecase.UpdateWarehouse(c, id, &req)
 	if err != nil {
+		if errors.Is(err, usecase.ErrWarehouseCodeInvalid) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -117,6 +126,10 @@ func (h *WarehouseHandler) DeleteWarehouse(c *gin.Context) {
 	}
 
 	if err := h.usecase.DeleteWarehouse(c, id); err != nil {
+		if errors.Is(err, usecase.ErrWarehouseReferenced) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}

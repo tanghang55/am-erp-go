@@ -19,18 +19,18 @@ func NewInventoryBalanceRepository(db *gorm.DB) domain.InventoryBalanceRepositor
 	return &InventoryBalanceRepository{db: db}
 }
 
-func (r *InventoryBalanceRepository) GetOrCreate(ctx context.Context, skuID, warehouseID uint64) (*domain.InventoryBalance, error) {
+func (r *InventoryBalanceRepository) GetOrCreate(ctx context.Context, productID, warehouseID uint64) (*domain.InventoryBalance, error) {
 	var balance domain.InventoryBalance
 
 	err := r.db.WithContext(ctx).
-		Where("sku_id = ? AND warehouse_id = ?", skuID, warehouseID).
+		Where("product_id = ? AND warehouse_id = ?", productID, warehouseID).
 		First(&balance).Error
 
 	if err == gorm.ErrRecordNotFound {
 		// Create new balance record
 		now := time.Now()
 		balance = domain.InventoryBalance{
-			SkuID:             skuID,
+			ProductID:         productID,
 			WarehouseID:       warehouseID,
 			AvailableQuantity: 0,
 			ReservedQuantity:  0,
@@ -69,8 +69,8 @@ func (r *InventoryBalanceRepository) List(params *domain.BalanceListParams) ([]*
 		query = query.Where("warehouse_id = ?", *params.WarehouseID)
 	}
 
-	if params.SkuID != nil {
-		query = query.Where("sku_id = ?", *params.SkuID)
+	if params.ProductID != nil {
+		query = query.Where("product_id = ?", *params.ProductID)
 	}
 
 	if params.ZeroStock != nil && *params.ZeroStock {
@@ -87,7 +87,7 @@ func (r *InventoryBalanceRepository) List(params *domain.BalanceListParams) ([]*
 
 	if params.Keyword != nil && *params.Keyword != "" {
 		// Join with product table for keyword search
-		query = query.Joins("LEFT JOIN product ON product.id = inventory_balance.sku_id").
+		query = query.Joins("LEFT JOIN product ON product.id = inventory_balance.product_id").
 			Where("product.seller_sku LIKE ? OR product.title LIKE ?",
 				"%"+*params.Keyword+"%", "%"+*params.Keyword+"%")
 	}
@@ -105,23 +105,23 @@ func (r *InventoryBalanceRepository) List(params *domain.BalanceListParams) ([]*
 		return nil, 0, err
 	}
 
-	// Load SKU and Warehouse info
+	// Load product and warehouse info
 	r.loadAssociations(balances)
 
 	return balances, total, nil
 }
 
-func (r *InventoryBalanceRepository) GetBySkuAndWarehouse(skuID, warehouseID uint64) (*domain.InventoryBalance, error) {
+func (r *InventoryBalanceRepository) GetByProductAndWarehouse(productID, warehouseID uint64) (*domain.InventoryBalance, error) {
 	var balance domain.InventoryBalance
 
-	err := r.db.Where("sku_id = ? AND warehouse_id = ?", skuID, warehouseID).
+	err := r.db.Where("product_id = ? AND warehouse_id = ?", productID, warehouseID).
 		First(&balance).Error
 
 	if err != nil {
 		// 如果没有找到记录，返回一个零值的库存余额对象
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return &domain.InventoryBalance{
-				SkuID:       skuID,
+				ProductID:   productID,
 				WarehouseID: warehouseID,
 				// 所有数量字段默认为 0
 			}, nil
@@ -138,29 +138,31 @@ func (r *InventoryBalanceRepository) loadAssociations(balances []*domain.Invento
 		return
 	}
 
-	// Load SKU info
-	skuIDs := make([]uint64, 0)
+	// Load product info
+	productIDs := make([]uint64, 0)
 	for _, b := range balances {
-		skuIDs = append(skuIDs, b.SkuID)
+		productIDs = append(productIDs, b.ProductID)
 	}
 
-	type SkuInfo struct {
+	type productInfo struct {
 		ID        uint64
 		SellerSku string
 		Title     string
+		Asin      string
 	}
-	var skus []SkuInfo
+	var products []productInfo
 	r.db.Table("product").
-		Select("id, seller_sku, title").
-		Where("id IN ?", skuIDs).
-		Find(&skus)
+		Select("id, seller_sku, title, asin").
+		Where("id IN ?", productIDs).
+		Find(&products)
 
-	skuMap := make(map[uint64]*domain.SkuSnapshot)
-	for _, sku := range skus {
-		skuMap[sku.ID] = &domain.SkuSnapshot{
-			ID:        sku.ID,
-			SellerSku: sku.SellerSku,
-			Title:     sku.Title,
+	productMap := make(map[uint64]*domain.ProductSnapshot)
+	for _, product := range products {
+		productMap[product.ID] = &domain.ProductSnapshot{
+			ID:        product.ID,
+			SellerSku: product.SellerSku,
+			Title:     product.Title,
+			Asin:      product.Asin,
 		}
 	}
 
@@ -192,7 +194,7 @@ func (r *InventoryBalanceRepository) loadAssociations(balances []*domain.Invento
 
 	// Assign to balances
 	for _, b := range balances {
-		b.Sku = skuMap[b.SkuID]
+		b.Product = productMap[b.ProductID]
 		b.Warehouse = warehouseMap[b.WarehouseID]
 	}
 }

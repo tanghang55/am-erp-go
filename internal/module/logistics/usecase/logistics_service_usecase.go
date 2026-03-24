@@ -2,8 +2,10 @@ package usecase
 
 import (
 	"errors"
+	"strings"
 	"time"
 
+	"am-erp-go/internal/infrastructure/validation"
 	"am-erp-go/internal/module/logistics/domain"
 
 	"gorm.io/gorm"
@@ -12,6 +14,8 @@ import (
 var (
 	ErrServiceNotFound      = errors.New("logistics service not found")
 	ErrServiceCodeDuplicate = errors.New("service code already exists")
+	ErrServiceCodeInvalid   = errors.New("service code only supports letters, numbers, hyphen and underscore")
+	ErrServiceReferenced    = errors.New("logistics service is still referenced by business data")
 )
 
 type LogisticsServiceUsecase struct {
@@ -27,6 +31,9 @@ func NewLogisticsServiceUsecase(
 }
 
 func (uc *LogisticsServiceUsecase) Create(params *domain.CreateLogisticsServiceParams) (*domain.LogisticsService, error) {
+	if !validation.IsValidCode(strings.TrimSpace(params.ServiceCode)) {
+		return nil, ErrServiceCodeInvalid
+	}
 	// 检查服务代码是否已存在
 	existingService, err := uc.serviceRepo.GetByCode(params.ServiceCode)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -72,6 +79,9 @@ func (uc *LogisticsServiceUsecase) Update(id uint64, params *domain.UpdateLogist
 
 	// 如果要修改服务代码，检查新代码是否已存在
 	if params.ServiceCode != nil && *params.ServiceCode != service.ServiceCode {
+		if !validation.IsValidCode(strings.TrimSpace(*params.ServiceCode)) {
+			return ErrServiceCodeInvalid
+		}
 		existingService, err := uc.serviceRepo.GetByCode(*params.ServiceCode)
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
@@ -112,6 +122,14 @@ func (uc *LogisticsServiceUsecase) Delete(id uint64) error {
 		return err
 	}
 
+	refCount, err := uc.serviceRepo.CountReferences(id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrServiceReferenced
+	}
+
 	return uc.serviceRepo.Delete(id)
 }
 
@@ -127,7 +145,23 @@ func (uc *LogisticsServiceUsecase) Get(id uint64) (*domain.LogisticsService, err
 }
 
 func (uc *LogisticsServiceUsecase) List(params *domain.LogisticsServiceListParams) ([]*domain.LogisticsService, int64, error) {
-	return uc.serviceRepo.List(params)
+	services, total, err := uc.serviceRepo.List(params)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, service := range services {
+		service.Deletable = true
+		refCount, err := uc.serviceRepo.CountReferences(service.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		service.ReferenceCount = refCount
+		if refCount > 0 {
+			service.Deletable = false
+			service.DeleteBlockReason = "已被业务数据引用，不可删除"
+		}
+	}
+	return services, total, nil
 }
 
 func (uc *LogisticsServiceUsecase) GetActiveServices() ([]*domain.LogisticsService, error) {

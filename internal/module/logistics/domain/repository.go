@@ -7,6 +7,7 @@ type LogisticsProviderRepository interface {
 	GetByID(id uint64) (*LogisticsProvider, error)
 	GetByCode(code string) (*LogisticsProvider, error)
 	List(params *LogisticsProviderListParams) ([]*LogisticsProvider, int64, error)
+	CountReferences(id uint64) (int64, error)
 }
 
 type ShippingRateRepository interface {
@@ -16,4 +17,5 @@ type ShippingRateRepository interface {
 	GetByID(id uint64) (*ShippingRate, error)
 	List(params *ShippingRateListParams) ([]*ShippingRate, int64, error)
 	QueryLatestRate(params *QueryLatestRateParams) (*ShippingRate, error)
+	CountReferences(id uint64) (int64, error)
 }

@@ -1,0 +1,1 @@
+DELETE FROM `menu` WHERE `code` = 'SYSTEM_SETTINGS';

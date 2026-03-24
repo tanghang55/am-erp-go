@@ -22,6 +22,7 @@ var (
 type ProductSupplierRepository interface {
 	GetDefaultSupplierID(productID uint64) (uint64, error)
 	UpdateDefaultSupplierID(productID, supplierID uint64) error
+	UpdateUnitCost(productID uint64, unitCost float64) error
 }
 
 type AuditLogger interface {
@@ -59,6 +60,10 @@ func (uc *QuoteUsecase) ListProductQuotes(params *domain.QuoteListParams) ([]dom
 	return uc.quoteRepo.ListProductsWithQuotes(params)
 }
 
+func (uc *QuoteUsecase) GetProductQuote(productID, supplierID uint64) (*domain.ProductSupplierQuote, error) {
+	return uc.quoteRepo.GetByProductSupplier(productID, supplierID)
+}
+
 func (uc *QuoteUsecase) CreateQuote(c *gin.Context, quote *domain.ProductSupplierQuote) (*domain.ProductSupplierQuote, error) {
 	if quote == nil {
 		return nil, errors.New("invalid quote")
@@ -71,12 +76,15 @@ func (uc *QuoteUsecase) CreateQuote(c *gin.Context, quote *domain.ProductSupplie
 	if err == nil && existing != nil {
 		return nil, ErrQuoteExists
 	}
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) && !errors.Is(err, domain.ErrQuoteNotFound) {
 		return nil, err
 	}
 
 	quote.Status = defaultQuoteStatus(quote.Status)
 	if err := uc.quoteRepo.Create(quote); err != nil {
+		return nil, err
+	}
+	if err := uc.syncProductUnitCostForDefaultSupplier(quote.ProductID, quote.SupplierID, quote.Price); err != nil {
 		return nil, err
 	}
 
@@ -108,6 +116,9 @@ func (uc *QuoteUsecase) UpdateQuote(c *gin.Context, quote *domain.ProductSupplie
 	}
 
 	if err := uc.quoteRepo.Update(existing); err != nil {
+		return nil, err
+	}
+	if err := uc.syncProductUnitCostForDefaultSupplier(existing.ProductID, existing.SupplierID, existing.Price); err != nil {
 		return nil, err
 	}
 
@@ -160,11 +171,39 @@ func (uc *QuoteUsecase) SetDefaultSupplier(c *gin.Context, productID, supplierID
 	if err := uc.productRepo.UpdateDefaultSupplierID(productID, supplierID); err != nil {
 		return err
 	}
+	if err := uc.syncProductUnitCostFromQuote(productID, supplierID); err != nil {
+		return err
+	}
 
 	before := map[string]any{"default_supplier_id": beforeID}
 	after := map[string]any{"default_supplier_id": supplierID}
-	uc.recordAudit(c, "UPDATE", "Product", strconv.FormatUint(productID, 10), before, after)
+	uc.recordAudit(c, "SET_DEFAULT_SUPPLIER", "Product", strconv.FormatUint(productID, 10), before, after)
 	return nil
+}
+
+func (uc *QuoteUsecase) syncProductUnitCostForDefaultSupplier(productID, supplierID uint64, price float64) error {
+	if uc.productRepo == nil {
+		return nil
+	}
+	defaultSupplierID, err := uc.productRepo.GetDefaultSupplierID(productID)
+	if err != nil {
+		return err
+	}
+	if defaultSupplierID != supplierID {
+		return nil
+	}
+	return uc.productRepo.UpdateUnitCost(productID, price)
+}
+
+func (uc *QuoteUsecase) syncProductUnitCostFromQuote(productID, supplierID uint64) error {
+	if uc.productRepo == nil {
+		return nil
+	}
+	quote, err := uc.quoteRepo.GetByProductSupplier(productID, supplierID)
+	if err != nil {
+		return err
+	}
+	return uc.productRepo.UpdateUnitCost(productID, quote.Price)
 }
 
 func (uc *QuoteUsecase) recordAudit(c *gin.Context, action, entityType, entityID string, before, after any) {

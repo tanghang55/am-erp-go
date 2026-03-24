@@ -13,9 +13,10 @@ import (
 )
 
 type stubSupplierRepo struct {
-	listParams *domain.SupplierListParams
-	createItem *domain.Supplier
-	err        error
+	listParams     *domain.SupplierListParams
+	createItem     *domain.Supplier
+	referenceCount int64
+	err            error
 }
 
 func (s *stubSupplierRepo) List(params *domain.SupplierListParams) ([]domain.Supplier, int64, error) {
@@ -32,6 +33,9 @@ func (s *stubSupplierRepo) Create(supplier *domain.Supplier) error {
 }
 func (s *stubSupplierRepo) Update(_ *domain.Supplier) error { return s.err }
 func (s *stubSupplierRepo) Delete(_ uint64) error           { return s.err }
+func (s *stubSupplierRepo) CountReferences(_ uint64) (int64, error) {
+	return s.referenceCount, s.err
+}
 
 type stubSupplierTypeRepo struct {
 	replace   []string
@@ -171,6 +175,51 @@ func TestCreateSupplierParsesTypes(t *testing.T) {
 	}
 	if supplierRepo.createItem == nil || typeRepo.replaceID == 0 || len(typeRepo.replace) != 1 {
 		t.Fatalf("expected supplier create + types")
+	}
+}
+
+func TestCreateSupplierReturnsBadRequestWhenCodeInvalid(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	supplierRepo := &stubSupplierRepo{}
+	typeRepo := &stubSupplierTypeRepo{}
+	uc := usecase.NewSupplierUsecase(supplierRepo, typeRepo, nil, nil, nil)
+	handler := NewSupplierHandler(uc)
+
+	router := gin.New()
+	router.POST("/api/v1/suppliers", handler.CreateSupplier)
+
+	payload := []byte(`{"supplier_code":"供应商@001","name":"Demo","types":["PRODUCT"]}`)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/suppliers", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if supplierRepo.createItem != nil {
+		t.Fatalf("expected supplier create not called")
+	}
+}
+
+func TestDeleteSupplierReturnsBadRequestWhenReferenced(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	supplierRepo := &stubSupplierRepo{referenceCount: 1}
+	typeRepo := &stubSupplierTypeRepo{}
+	uc := usecase.NewSupplierUsecase(supplierRepo, typeRepo, nil, nil, nil)
+	handler := NewSupplierHandler(uc)
+
+	router := gin.New()
+	router.DELETE("/api/v1/suppliers/:id", handler.DeleteSupplier)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/suppliers/3", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 

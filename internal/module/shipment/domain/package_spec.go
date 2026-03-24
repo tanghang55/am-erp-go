@@ -4,19 +4,22 @@ import "time"
 
 // PackageSpec 装箱规格
 type PackageSpec struct {
-	ID             uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name           string    `json:"name" gorm:"column:name;size:100;not null"`              // 名称
-	Length         float64   `json:"length" gorm:"column:length;type:decimal(10,2)"`         // 长(cm)
-	Width          float64   `json:"width" gorm:"column:width;type:decimal(10,2)"`           // 宽(cm)
-	Height         float64   `json:"height" gorm:"column:height;type:decimal(10,2)"`         // 高(cm)
-	Weight         float64   `json:"weight" gorm:"column:weight;type:decimal(10,2)"`         // 重量(kg)
-	QuantityPerBox uint      `json:"quantity_per_box" gorm:"column:quantity_per_box;default:1"` // 每箱数量
-	Remark         *string   `json:"remark" gorm:"column:remark;size:500"`                   // 备注
-	Status         string    `json:"status" gorm:"column:status;size:20;default:'ACTIVE'"`   // 状态
-	CreatedBy   *uint64   `json:"created_by" gorm:"column:created_by"`
-	UpdatedBy   *uint64   `json:"updated_by" gorm:"column:updated_by"`
-	GmtCreate   time.Time `json:"created_at" gorm:"column:gmt_create;autoCreateTime"`
-	GmtModified time.Time `json:"updated_at" gorm:"column:gmt_modified;autoUpdateTime"`
+	ID                uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name              string    `json:"name" gorm:"column:name;size:100;not null"`                 // 名称
+	Length            float64   `json:"length" gorm:"column:length;type:decimal(10,2)"`            // 长(cm)
+	Width             float64   `json:"width" gorm:"column:width;type:decimal(10,2)"`              // 宽(cm)
+	Height            float64   `json:"height" gorm:"column:height;type:decimal(10,2)"`            // 高(cm)
+	Weight            float64   `json:"weight" gorm:"column:weight;type:decimal(10,2)"`            // 重量(kg)
+	QuantityPerBox    uint      `json:"quantity_per_box" gorm:"column:quantity_per_box;default:1"` // 每箱数量
+	Remark            *string   `json:"remark" gorm:"column:remark;size:500"`                      // 备注
+	Status            string    `json:"status" gorm:"column:status;size:20;default:'ACTIVE'"`      // 状态
+	CreatedBy         *uint64   `json:"created_by" gorm:"column:created_by"`
+	UpdatedBy         *uint64   `json:"updated_by" gorm:"column:updated_by"`
+	GmtCreate         time.Time `json:"created_at" gorm:"column:gmt_create;autoCreateTime"`
+	GmtModified       time.Time `json:"updated_at" gorm:"column:gmt_modified;autoUpdateTime"`
+	ReferenceCount    int64     `json:"reference_count" gorm:"-"`
+	Deletable         bool      `json:"deletable" gorm:"-"`
+	DeleteBlockReason string    `json:"delete_block_reason,omitempty" gorm:"-"`
 }
 
 func (PackageSpec) TableName() string {
@@ -69,6 +72,7 @@ type PackageSpecRepository interface {
 	List(params *PackageSpecListParams) ([]*PackageSpec, int64, error)
 	Delete(id uint64) error
 	ListByIDs(ids []uint64) ([]*PackageSpec, error)
+	CountReferences(id uint64) (int64, error)
 }
 
 // PackageSpecPackagingItem 装箱规格包材关联实体
@@ -84,7 +88,7 @@ type PackageSpecPackagingItem struct {
 	GmtModified     time.Time `json:"gmt_modified" gorm:"column:gmt_modified;autoUpdateTime"`
 
 	// 关联包材详情（查询时关联）
-	PackagingItem   *PackagingItemDetail `json:"packaging_item,omitempty" gorm:"-"`
+	PackagingItem *PackagingItemDetail `json:"packaging_item,omitempty" gorm:"-"`
 }
 
 func (PackageSpecPackagingItem) TableName() string {

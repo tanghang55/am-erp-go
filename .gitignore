@@ -2,3 +2,32 @@ am-erp-go
 am-erp-go.exe
 server.exe
 am-erp-go.exe~
+backups/
+
+# Sensitive local environment/config (never commit)
+.env
+.env.*
+!.env.example
+config/integrations.json
+config/integrations.local.json
+
+# Local uploaded images/files
+uploads/
+
+# Local runtime logs/artifacts
+logs/
+*.log
+*.err.log
+*.out.log
+server-*.log
+server-*.err.log
+server-*.out.log
+server-runtime.log
+server-temp.exe
+
+# Local temp/test files
+tmp-*.log
+tmp-*.err.log
+tmp-*.out.log
+tmp-*.go
+tmp_*.go

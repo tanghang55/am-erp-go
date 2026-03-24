@@ -74,3 +74,28 @@ func (r *supplierRepository) Update(supplier *domain.Supplier) error {
 func (r *supplierRepository) Delete(id uint64) error {
 	return r.db.Delete(&domain.Supplier{}, id).Error
 }
+
+func (r *supplierRepository) CountReferences(id uint64) (int64, error) {
+	tables := []struct {
+		name   string
+		column string
+	}{
+		{name: "product", column: "supplier_id"},
+		{name: "packaging_item", column: "supplier_id"},
+		{name: "purchase_order", column: "supplier_id"},
+		{name: "procurement_replenishment_strategy", column: "supplier_id"},
+		{name: "procurement_replenishment_plan", column: "supplier_id"},
+		{name: "product_supplier_quote", column: "supplier_id"},
+	}
+
+	var total int64
+	for _, item := range tables {
+		var count int64
+		if err := r.db.Table(item.name).Where(item.column+" = ?", id).Count(&count).Error; err != nil {
+			return 0, err
+		}
+		total += count
+	}
+
+	return total, nil
+}

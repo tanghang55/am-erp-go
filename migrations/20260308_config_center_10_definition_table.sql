@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS `config_definition` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `config_key` varchar(120) NOT NULL COMMENT '配置键',
+  `module_code` varchar(50) NOT NULL COMMENT '模块编码',
+  `module_name` varchar(100) NOT NULL COMMENT '模块名称',
+  `group_code` varchar(50) NOT NULL COMMENT '分组编码',
+  `group_name` varchar(100) NOT NULL COMMENT '分组名称',
+  `label` varchar(120) NOT NULL COMMENT '显示名称',
+  `description` varchar(255) DEFAULT NULL COMMENT '说明',
+  `value_type` varchar(20) NOT NULL COMMENT '值类型',
+  `scope_type` varchar(20) NOT NULL DEFAULT 'GLOBAL' COMMENT '作用域类型',
+  `default_value` varchar(255) NOT NULL COMMENT '默认值',
+  `options_json` json DEFAULT NULL COMMENT '可选项',
+  `sort` int unsigned NOT NULL DEFAULT '100' COMMENT '排序',
+  `is_active` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '是否启用',
+  `gmt_create` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `gmt_modified` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_config_definition_key` (`config_key`),
+  KEY `idx_config_definition_module` (`module_code`,`group_code`,`sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='配置中心定义表';

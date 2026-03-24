@@ -6,6 +6,7 @@ import (
 	"am-erp-go/internal/infrastructure/auth"
 	"am-erp-go/internal/infrastructure/response"
 	menudomain "am-erp-go/internal/module/menu/domain"
+	menuusecase "am-erp-go/internal/module/menu/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,6 +82,10 @@ func (h *MenuHandler) CreateMenu(c *gin.Context) {
 	}
 
 	if err := h.menuUsecase.CreateMenu(&menu); err != nil {
+		if err == menuusecase.ErrMenuCodeInvalid || err == menuusecase.ErrMenuPermissionCodeInvalid {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -103,6 +108,10 @@ func (h *MenuHandler) UpdateMenu(c *gin.Context) {
 
 	menu.ID = id
 	if err := h.menuUsecase.UpdateMenu(&menu); err != nil {
+		if err == menuusecase.ErrMenuCodeInvalid || err == menuusecase.ErrMenuPermissionCodeInvalid {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}

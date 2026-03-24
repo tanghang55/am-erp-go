@@ -58,6 +58,8 @@ func (s *stubProductSupplierRepo) GetDefaultSupplierID(_ uint64) (uint64, error)
 
 func (s *stubProductSupplierRepo) UpdateDefaultSupplierID(_, _ uint64) error { return s.err }
 
+func (s *stubProductSupplierRepo) UpdateUnitCost(_ uint64, _ float64) error { return s.err }
+
 func TestListProductQuotesParsesQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -69,7 +71,7 @@ func TestListProductQuotesParsesQuery(t *testing.T) {
 	router.GET("/api/v1/suppliers/product-quotes", handler.ListProductQuotes)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/suppliers/product-quotes?page=2&page_size=50&keyword=usb&marketplace=US&supplier_id=9", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/suppliers/product-quotes?page=2&page_size=50&keyword=usb&marketplace=US&supplier_id=9&product_id=12", nil)
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -83,6 +85,58 @@ func TestListProductQuotesParsesQuery(t *testing.T) {
 	}
 	if quoteRepo.listParams.SupplierID == nil || *quoteRepo.listParams.SupplierID != 9 {
 		t.Fatalf("expected supplier_id parsed")
+	}
+	if quoteRepo.listParams.ProductID == nil || *quoteRepo.listParams.ProductID != 12 {
+		t.Fatalf("expected product_id parsed")
+	}
+}
+
+func TestListProductQuotesParsesProductIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	quoteRepo := &stubQuoteRepo{}
+	uc := usecase.NewQuoteUsecase(quoteRepo, nil, nil)
+	handler := NewQuoteHandler(uc)
+
+	router := gin.New()
+	router.GET("/api/v1/suppliers/product-quotes", handler.ListProductQuotes)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/suppliers/product-quotes?product_ids=12,19,25", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if quoteRepo.listParams == nil {
+		t.Fatalf("expected list params captured")
+	}
+	if len(quoteRepo.listParams.ProductIDs) != 3 {
+		t.Fatalf("expected 3 product ids, got %+v", quoteRepo.listParams.ProductIDs)
+	}
+	if quoteRepo.listParams.ProductIDs[0] != 12 || quoteRepo.listParams.ProductIDs[1] != 19 || quoteRepo.listParams.ProductIDs[2] != 25 {
+		t.Fatalf("unexpected product ids: %+v", quoteRepo.listParams.ProductIDs)
+	}
+}
+
+func TestGetProductQuoteParsesQuery(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	quoteRepo := &stubQuoteRepo{
+		getQuote: &domain.ProductSupplierQuote{ID: 1, ProductID: 12, SupplierID: 9, Price: 18.6, Currency: "USD"},
+	}
+	uc := usecase.NewQuoteUsecase(quoteRepo, nil, nil)
+	handler := NewQuoteHandler(uc)
+
+	router := gin.New()
+	router.GET("/api/v1/suppliers/product-quotes/detail", handler.GetProductQuote)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/suppliers/product-quotes/detail?product_id=12&supplier_id=9", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d, body=%s", w.Code, w.Body.String())
 	}
 }
 

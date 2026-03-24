@@ -25,6 +25,20 @@ func (r *ShipmentItemRepo) CreateBatch(items []domain.ShipmentItem) error {
 	return r.db.Create(&items).Error
 }
 
+func (r *ShipmentItemRepo) UpdateBatch(items []domain.ShipmentItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for i := range items {
+			if err := tx.Save(&items[i]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (r *ShipmentItemRepo) GetByShipmentID(shipmentID uint64) ([]domain.ShipmentItem, error) {
 	var items []domain.ShipmentItem
 	err := r.db.Where("shipment_id = ?", shipmentID).Find(&items).Error

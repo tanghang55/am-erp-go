@@ -1,14 +1,16 @@
 package usecase
 
 import (
-    "testing"
+	"errors"
+	"testing"
 
-    "am-erp-go/internal/module/identity/domain"
-    menudomain "am-erp-go/internal/module/menu/domain"
+	"am-erp-go/internal/module/identity/domain"
+	menudomain "am-erp-go/internal/module/menu/domain"
 )
 
 type stubMenuRepo struct {
-	all []menudomain.Menu
+	all       []menudomain.Menu
+	filtered  []menudomain.Menu
 	created   *menudomain.Menu
 	updated   *menudomain.Menu
 	deletedID *uint64
@@ -17,15 +19,18 @@ type stubMenuRepo struct {
 }
 
 func (s *stubMenuRepo) GetMenusByPermissionCodes(_ []string) ([]menudomain.Menu, error) {
-    return s.all, nil
+	if s.filtered != nil {
+		return s.filtered, nil
+	}
+	return s.all, nil
 }
 
 func (s *stubMenuRepo) GetAllMenus() ([]menudomain.Menu, error) {
-    return s.all, nil
+	return s.all, nil
 }
 
 func (s *stubMenuRepo) GetAllMenusRaw() ([]menudomain.Menu, error) {
-    return s.all, nil
+	return s.all, nil
 }
 
 func (s *stubMenuRepo) List(_ *menudomain.MenuListParams) ([]menudomain.Menu, int64, error) {
@@ -33,7 +38,7 @@ func (s *stubMenuRepo) List(_ *menudomain.MenuListParams) ([]menudomain.Menu, in
 }
 
 func (s *stubMenuRepo) GetByID(_ uint64) (*menudomain.Menu, error) {
-    return nil, nil
+	return nil, nil
 }
 
 func (s *stubMenuRepo) Create(menu *menudomain.Menu) error {
@@ -58,33 +63,76 @@ func (s *stubMenuRepo) UpdateStatus(id uint64, status string) error {
 }
 
 type stubUserRepo struct {
-    roles       []domain.Role
-    permissions []domain.Permission
+	roles       []domain.Role
+	permissions []domain.Permission
 }
 
 func (s *stubUserRepo) FindByUsername(_ string) (*domain.User, error) { return nil, nil }
-func (s *stubUserRepo) FindByID(_ uint64) (*domain.User, error)        { return nil, nil }
-func (s *stubUserRepo) GetUserRoles(_ uint64) ([]domain.Role, error)   { return s.roles, nil }
+func (s *stubUserRepo) FindByID(_ uint64) (*domain.User, error)       { return nil, nil }
+func (s *stubUserRepo) ListUsers(_ *domain.UserListParams) ([]domain.User, int64, error) {
+	return nil, 0, nil
+}
+func (s *stubUserRepo) GetUserByID(_ uint64) (*domain.User, error) { return nil, nil }
+func (s *stubUserRepo) CreateUser(_ *domain.User) error            { return nil }
+func (s *stubUserRepo) UpdateUser(_ *domain.User) error            { return nil }
+func (s *stubUserRepo) DisableUser(_ uint64) error                 { return nil }
+func (s *stubUserRepo) ReplaceUserRoles(_ uint64, _ []uint64) error {
+	return nil
+}
+func (s *stubUserRepo) ListRoles() ([]domain.Role, error) { return s.roles, nil }
+func (s *stubUserRepo) ListPermissions() ([]domain.Permission, error) {
+	return s.permissions, nil
+}
+func (s *stubUserRepo) GetUserRoles(_ uint64) ([]domain.Role, error) { return s.roles, nil }
 func (s *stubUserRepo) GetUserPermissions(_ uint64) ([]domain.Permission, error) {
-    return s.permissions, nil
+	return s.permissions, nil
 }
 
 func TestMenuTreeBuildsHierarchy(t *testing.T) {
-    rootID := uint64(1)
-    menus := []menudomain.Menu{
-        {ID: rootID, Title: "System", Code: "system", Sort: 1},
-        {ID: 2, Title: "Menu List", Code: "menu-list", ParentID: &rootID, Sort: 1},
-    }
+	rootID := uint64(1)
+	menus := []menudomain.Menu{
+		{ID: rootID, Title: "System", Code: "system", Sort: 1},
+		{ID: 2, Title: "Menu List", Code: "menu-list", ParentID: &rootID, Sort: 1},
+	}
 
-    uc := NewMenuUsecase(&stubMenuRepo{all: menus}, &stubUserRepo{})
+	uc := NewMenuUsecase(&stubMenuRepo{all: menus}, &stubUserRepo{})
 
-    tree, err := uc.GetMenuTree(1)
-    if err != nil {
-        t.Fatalf("unexpected error: %v", err)
-    }
-    if len(tree) != 1 || len(tree[0].Children) != 1 {
-        t.Fatalf("expected one root with one child, got: %#v", tree)
-    }
+	tree, err := uc.GetMenuTree(1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tree) != 1 || len(tree[0].Children) != 1 {
+		t.Fatalf("expected one root with one child, got: %#v", tree)
+	}
+}
+
+func TestMenuTreeIncludesAncestorsForNonAdmin(t *testing.T) {
+	rootID := uint64(1)
+	menus := []menudomain.Menu{
+		{ID: rootID, Title: "系统管理", Code: "system", Sort: 1},
+		{ID: 2, Title: "用户管理", Code: "system-users", ParentID: &rootID, Sort: 2, PermissionCode: "identity.manage"},
+	}
+
+	repo := &stubMenuRepo{
+		all:      menus,
+		filtered: []menudomain.Menu{menus[1]},
+	}
+	userRepo := &stubUserRepo{
+		roles:       []domain.Role{{Name: "operator"}},
+		permissions: []domain.Permission{{Code: "identity.manage"}},
+	}
+	uc := NewMenuUsecase(repo, userRepo)
+
+	tree, err := uc.GetMenuTree(1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tree) != 1 {
+		t.Fatalf("expected one root node, got %d", len(tree))
+	}
+	if tree[0].Title != "系统管理" || len(tree[0].Children) != 1 || tree[0].Children[0].Title != "用户管理" {
+		t.Fatalf("expected ancestor chain in tree, got %#v", tree)
+	}
 }
 
 func TestListMenusAddsParentAndFullPath(t *testing.T) {
@@ -115,6 +163,34 @@ func TestCreateMenuCallsRepo(t *testing.T) {
 	}
 	if repo.created != &menu {
 		t.Fatalf("expected repo to receive menu")
+	}
+}
+
+func TestCreateMenuRejectsInvalidCode(t *testing.T) {
+	repo := &stubMenuRepo{}
+	uc := NewMenuUsecase(repo, &stubUserRepo{})
+
+	menu := menudomain.Menu{Title: "Menu", Code: "菜单@001"}
+	err := uc.CreateMenu(&menu)
+	if !errors.Is(err, ErrMenuCodeInvalid) {
+		t.Fatalf("expected ErrMenuCodeInvalid, got %v", err)
+	}
+	if repo.created != nil {
+		t.Fatalf("expected repo create not called")
+	}
+}
+
+func TestCreateMenuRejectsInvalidPermissionCode(t *testing.T) {
+	repo := &stubMenuRepo{}
+	uc := NewMenuUsecase(repo, &stubUserRepo{})
+
+	menu := menudomain.Menu{Title: "Menu", Code: "MENU_001", PermissionCode: "system@manage"}
+	err := uc.CreateMenu(&menu)
+	if !errors.Is(err, ErrMenuPermissionCodeInvalid) {
+		t.Fatalf("expected ErrMenuPermissionCodeInvalid, got %v", err)
+	}
+	if repo.created != nil {
+		t.Fatalf("expected repo create not called")
 	}
 }
 

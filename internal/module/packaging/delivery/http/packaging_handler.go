@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
@@ -74,6 +75,10 @@ func (h *PackagingHandler) CreateItem(c *gin.Context) {
 	item.CreatedBy = *userID
 
 	if err := h.uc.CreateItem(&item); err != nil {
+		if errors.Is(err, usecase.ErrPackagingSupplierRequired) || errors.Is(err, usecase.ErrPackagingItemCodeInvalid) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -97,6 +102,10 @@ func (h *PackagingHandler) UpdateItem(c *gin.Context) {
 
 	item.ID = id
 	if err := h.uc.UpdateItem(&item); err != nil {
+		if errors.Is(err, usecase.ErrPackagingSupplierRequired) || errors.Is(err, usecase.ErrPackagingItemCodeInvalid) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -113,6 +122,10 @@ func (h *PackagingHandler) DeleteItem(c *gin.Context) {
 	}
 
 	if err := h.uc.DeleteItem(id); err != nil {
+		if errors.Is(err, usecase.ErrPackagingItemReferenced) {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}

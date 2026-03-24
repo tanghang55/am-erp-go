@@ -170,6 +170,10 @@ func (h *PackageSpecHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.uc.Delete(id); err != nil {
+		if err == usecase.ErrPackageSpecReferenced {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, "删除装箱规格失败")
 		return
 	}

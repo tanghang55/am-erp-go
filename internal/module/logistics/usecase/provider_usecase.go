@@ -2,8 +2,10 @@ package usecase
 
 import (
 	"errors"
+	"strings"
 	"time"
 
+	"am-erp-go/internal/infrastructure/validation"
 	"am-erp-go/internal/module/logistics/domain"
 
 	"gorm.io/gorm"
@@ -12,7 +14,8 @@ import (
 var (
 	ErrProviderNotFound    = errors.New("logistics provider not found")
 	ErrProviderCodeExists  = errors.New("provider code already exists")
-	ErrProviderHasRates    = errors.New("cannot delete provider with active shipping rates")
+	ErrProviderCodeInvalid = errors.New("provider code only supports letters, numbers, hyphen and underscore")
+	ErrProviderReferenced  = errors.New("logistics provider is still referenced by business data")
 )
 
 type LogisticsProviderUsecase struct {
@@ -26,6 +29,9 @@ func NewLogisticsProviderUsecase(providerRepo domain.LogisticsProviderRepository
 }
 
 func (uc *LogisticsProviderUsecase) Create(params *domain.CreateProviderParams) (*domain.LogisticsProvider, error) {
+	if !validation.IsValidCode(strings.TrimSpace(params.ProviderCode)) {
+		return nil, ErrProviderCodeInvalid
+	}
 	// 检查代码是否已存在
 	existing, err := uc.providerRepo.GetByCode(params.ProviderCode)
 	if err == nil && existing != nil {
@@ -77,6 +83,9 @@ func (uc *LogisticsProviderUsecase) Update(id uint64, params *domain.UpdateProvi
 
 	// 检查代码是否被其他记录占用
 	if params.ProviderCode != nil && *params.ProviderCode != provider.ProviderCode {
+		if !validation.IsValidCode(strings.TrimSpace(*params.ProviderCode)) {
+			return ErrProviderCodeInvalid
+		}
 		existing, err := uc.providerRepo.GetByCode(*params.ProviderCode)
 		if err == nil && existing != nil && existing.ID != id {
 			return ErrProviderCodeExists
@@ -143,8 +152,13 @@ func (uc *LogisticsProviderUsecase) Delete(id uint64) error {
 		return err
 	}
 
-	// TODO: 检查是否有关联的运费报价
-	// 如果有未过期的报价，不允许删除
+	refCount, err := uc.providerRepo.CountReferences(id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrProviderReferenced
+	}
 
 	return uc.providerRepo.Delete(id)
 }
@@ -161,5 +175,21 @@ func (uc *LogisticsProviderUsecase) Get(id uint64) (*domain.LogisticsProvider, e
 }
 
 func (uc *LogisticsProviderUsecase) List(params *domain.LogisticsProviderListParams) ([]*domain.LogisticsProvider, int64, error) {
-	return uc.providerRepo.List(params)
+	providers, total, err := uc.providerRepo.List(params)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, provider := range providers {
+		provider.Deletable = true
+		refCount, err := uc.providerRepo.CountReferences(provider.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		provider.ReferenceCount = refCount
+		if refCount > 0 {
+			provider.Deletable = false
+			provider.DeleteBlockReason = "已被业务数据引用，不可删除"
+		}
+	}
+	return providers, total, nil
 }

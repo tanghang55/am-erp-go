@@ -26,8 +26,8 @@ func (r *InventoryMovementRepository) List(params *domain.MovementListParams) ([
 
 	query := r.db.Model(&domain.InventoryMovement{})
 
-	if params.SkuID != nil {
-		query = query.Where("sku_id = ?", *params.SkuID)
+	if params.ProductID != nil {
+		query = query.Where("product_id = ?", *params.ProductID)
 	}
 
 	if params.WarehouseID != nil {
@@ -81,29 +81,31 @@ func (r *InventoryMovementRepository) loadAssociations(movements []*domain.Inven
 		return
 	}
 
-	// Load SKU info
-	skuIDs := make([]uint64, 0)
+	// Load product info
+	productIDs := make([]uint64, 0)
 	for _, m := range movements {
-		skuIDs = append(skuIDs, m.SkuID)
+		productIDs = append(productIDs, m.ProductID)
 	}
 
-	type SkuInfo struct {
+	type productInfo struct {
 		ID        uint64
 		SellerSku string
 		Title     string
+		Asin      string
 	}
-	var skus []SkuInfo
+	var products []productInfo
 	r.db.Table("product").
-		Select("id, seller_sku, title").
-		Where("id IN ?", skuIDs).
-		Find(&skus)
+		Select("id, seller_sku, title, asin").
+		Where("id IN ?", productIDs).
+		Find(&products)
 
-	skuMap := make(map[uint64]*domain.SkuSnapshot)
-	for _, sku := range skus {
-		skuMap[sku.ID] = &domain.SkuSnapshot{
-			ID:        sku.ID,
-			SellerSku: sku.SellerSku,
-			Title:     sku.Title,
+	productMap := make(map[uint64]*domain.ProductSnapshot)
+	for _, product := range products {
+		productMap[product.ID] = &domain.ProductSnapshot{
+			ID:        product.ID,
+			SellerSku: product.SellerSku,
+			Title:     product.Title,
+			Asin:      product.Asin,
 		}
 	}
 
@@ -165,7 +167,7 @@ func (r *InventoryMovementRepository) loadAssociations(movements []*domain.Inven
 
 	// Assign to movements
 	for _, m := range movements {
-		m.Sku = skuMap[m.SkuID]
+		m.Product = productMap[m.ProductID]
 		m.Warehouse = warehouseMap[m.WarehouseID]
 		if m.OperatorID != nil {
 			m.Operator = operatorMap[*m.OperatorID]

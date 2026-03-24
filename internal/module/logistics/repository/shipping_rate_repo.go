@@ -30,7 +30,12 @@ func (r *ShippingRateRepository) Delete(id uint64) error {
 
 func (r *ShippingRateRepository) GetByID(id uint64) (*domain.ShippingRate, error) {
 	var rate domain.ShippingRate
-	err := r.db.First(&rate, id).Error
+	err := r.db.
+		Preload("Provider").
+		Preload("OriginWarehouse").
+		Preload("DestinationWarehouse").
+		Preload("Service").
+		First(&rate, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -134,4 +139,10 @@ func (r *ShippingRateRepository) QueryLatestRate(params *domain.QueryLatestRateP
 	}
 
 	return &rate, nil
+}
+
+func (r *ShippingRateRepository) CountReferences(id uint64) (int64, error) {
+	var count int64
+	err := r.db.Table("shipment").Where("shipping_rate_id = ?", id).Count(&count).Error
+	return count, err
 }

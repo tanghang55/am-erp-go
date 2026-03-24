@@ -73,6 +73,10 @@ func (h *LogisticsProviderHandler) CreateProvider(c *gin.Context) {
 
 	provider, err := h.usecase.Create(&params)
 	if err != nil {
+		if err == usecase.ErrProviderCodeInvalid || err == usecase.ErrProviderCodeExists {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, err.Error())
 		return
 	}
@@ -95,6 +99,10 @@ func (h *LogisticsProviderHandler) UpdateProvider(c *gin.Context) {
 	}
 
 	if err := h.usecase.Update(id, &params); err != nil {
+		if err == usecase.ErrProviderCodeInvalid || err == usecase.ErrProviderCodeExists {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, err.Error())
 		return
 	}
@@ -111,6 +119,10 @@ func (h *LogisticsProviderHandler) DeleteProvider(c *gin.Context) {
 	}
 
 	if err := h.usecase.Delete(id); err != nil {
+		if err == usecase.ErrProviderReferenced {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, err.Error())
 		return
 	}

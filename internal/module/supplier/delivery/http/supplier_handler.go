@@ -107,6 +107,10 @@ func (h *SupplierHandler) CreateSupplier(c *gin.Context) {
 
 	created, err := h.supplierUsecase.CreateSupplier(&supplier, req.Types)
 	if err != nil {
+		if err == usecase.ErrSupplierCodeInvalid {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -138,6 +142,10 @@ func (h *SupplierHandler) UpdateSupplier(c *gin.Context) {
 
 	updated, err := h.supplierUsecase.UpdateSupplier(&supplier, req.Types)
 	if err != nil {
+		if err == usecase.ErrSupplierCodeInvalid {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}
@@ -154,6 +162,10 @@ func (h *SupplierHandler) DeleteSupplier(c *gin.Context) {
 	}
 
 	if err := h.supplierUsecase.DeleteSupplier(id); err != nil {
+		if err == usecase.ErrSupplierReferenced {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.InternalError(c, err.Error())
 		return
 	}

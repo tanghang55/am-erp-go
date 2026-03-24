@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"am-erp-go/internal/module/inventory/domain"
 
@@ -74,4 +75,33 @@ func (r *WarehouseRepository) GetActiveWarehouses() ([]*domain.Warehouse, error)
 		Order("id ASC").
 		Find(&warehouses).Error
 	return warehouses, err
+}
+
+func (r *WarehouseRepository) CountReferences(id uint64) (int64, error) {
+	var total int64
+	queries := []string{
+		"SELECT COUNT(1) FROM inventory_balance WHERE warehouse_id = ?",
+		"SELECT COUNT(1) FROM inventory_lot WHERE warehouse_id = ?",
+		"SELECT COUNT(1) FROM inventory_movement WHERE warehouse_id = ?",
+		"SELECT COUNT(1) FROM shipping_rate WHERE origin_warehouse_id = ? OR destination_warehouse_id = ?",
+		"SELECT COUNT(1) FROM shipment WHERE warehouse_id = ? OR destination_warehouse_id = ?",
+		"SELECT COUNT(1) FROM procurement_replenishment_strategy WHERE warehouse_id = ?",
+		"SELECT COUNT(1) FROM procurement_replenishment_plan WHERE warehouse_id = ?",
+	}
+
+	for _, query := range queries {
+		var count int64
+		var err error
+		if strings.Contains(query, "OR") {
+			err = r.db.Raw(query, id, id).Scan(&count).Error
+		} else {
+			err = r.db.Raw(query, id).Scan(&count).Error
+		}
+		if err != nil {
+			return 0, err
+		}
+		total += count
+	}
+
+	return total, nil
 }

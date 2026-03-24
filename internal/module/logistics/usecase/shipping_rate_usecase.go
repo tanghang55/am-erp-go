@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"am-erp-go/internal/module/logistics/domain"
@@ -10,12 +11,18 @@ import (
 )
 
 var (
-	ErrRateNotFound = errors.New("shipping rate not found")
+	ErrRateNotFound   = errors.New("shipping rate not found")
+	ErrRateReferenced = errors.New("shipping rate is still referenced by business data")
 )
 
 type ShippingRateUsecase struct {
-	rateRepo     domain.ShippingRateRepository
-	providerRepo domain.LogisticsProviderRepository
+	rateRepo         domain.ShippingRateRepository
+	providerRepo     domain.LogisticsProviderRepository
+	defaultsProvider ShippingRateDefaultsProvider
+}
+
+type ShippingRateDefaultsProvider interface {
+	GetDefaultBaseCurrency() string
 }
 
 func NewShippingRateUsecase(
@@ -26,6 +33,10 @@ func NewShippingRateUsecase(
 		rateRepo:     rateRepo,
 		providerRepo: providerRepo,
 	}
+}
+
+func (uc *ShippingRateUsecase) BindDefaultsProvider(provider ShippingRateDefaultsProvider) {
+	uc.defaultsProvider = provider
 }
 
 func (uc *ShippingRateUsecase) Create(params *domain.CreateShippingRateParams) (*domain.ShippingRate, error) {
@@ -58,10 +69,7 @@ func (uc *ShippingRateUsecase) Create(params *domain.CreateShippingRateParams) (
 		GmtModified:            now,
 	}
 
-
-	if rate.Currency == "" {
-		rate.Currency = "CNY"
-	}
+	rate.Currency = uc.defaultCurrency(rate.Currency)
 
 	if err := uc.rateRepo.Create(rate); err != nil {
 		return nil, err
@@ -126,7 +134,7 @@ func (uc *ShippingRateUsecase) Update(id uint64, params *domain.UpdateShippingRa
 		rate.Remark = params.Remark
 	}
 	rate.UpdatedBy = params.OperatorID
-	rate.OtherFee =  params.OtherFee
+	rate.OtherFee = params.OtherFee
 
 	return uc.rateRepo.Update(rate)
 }
@@ -138,6 +146,14 @@ func (uc *ShippingRateUsecase) Delete(id uint64) error {
 			return ErrRateNotFound
 		}
 		return err
+	}
+
+	refCount, err := uc.rateRepo.CountReferences(id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrRateReferenced
 	}
 
 	return uc.rateRepo.Delete(id)
@@ -155,9 +171,37 @@ func (uc *ShippingRateUsecase) Get(id uint64) (*domain.ShippingRate, error) {
 }
 
 func (uc *ShippingRateUsecase) List(params *domain.ShippingRateListParams) ([]*domain.ShippingRate, int64, error) {
-	return uc.rateRepo.List(params)
+	rates, total, err := uc.rateRepo.List(params)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, rate := range rates {
+		rate.Deletable = true
+		refCount, err := uc.rateRepo.CountReferences(rate.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		rate.ReferenceCount = refCount
+		if refCount > 0 {
+			rate.Deletable = false
+			rate.DeleteBlockReason = "已被发货单引用，不可删除"
+		}
+	}
+	return rates, total, nil
 }
 
 func (uc *ShippingRateUsecase) QueryLatestRate(params *domain.QueryLatestRateParams) (*domain.ShippingRate, error) {
 	return uc.rateRepo.QueryLatestRate(params)
+}
+
+func (uc *ShippingRateUsecase) defaultCurrency(currency string) string {
+	if strings.TrimSpace(currency) != "" {
+		return strings.TrimSpace(currency)
+	}
+	if uc != nil && uc.defaultsProvider != nil {
+		if defaultCurrency := strings.TrimSpace(uc.defaultsProvider.GetDefaultBaseCurrency()); defaultCurrency != "" {
+			return defaultCurrency
+		}
+	}
+	return "USD"
 }

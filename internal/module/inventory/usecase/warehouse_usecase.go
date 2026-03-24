@@ -2,11 +2,17 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"am-erp-go/internal/infrastructure/validation"
 	"am-erp-go/internal/module/inventory/domain"
 )
+
+var ErrWarehouseCodeInvalid = errors.New("warehouse code only supports letters, numbers, hyphen and underscore")
+var ErrWarehouseReferenced = errors.New("warehouse is still referenced by business data")
 
 type WarehouseUsecase struct {
 	repo domain.WarehouseRepository
@@ -17,7 +23,23 @@ func NewWarehouseUsecase(repo domain.WarehouseRepository) *WarehouseUsecase {
 }
 
 func (u *WarehouseUsecase) ListWarehouses(params *domain.WarehouseListParams) ([]*domain.Warehouse, int64, error) {
-	return u.repo.List(params)
+	warehouses, total, err := u.repo.List(params)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, warehouse := range warehouses {
+		warehouse.Deletable = true
+		refCount, err := u.repo.CountReferences(warehouse.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		warehouse.ReferenceCount = refCount
+		if refCount > 0 {
+			warehouse.Deletable = false
+			warehouse.DeleteBlockReason = "已被业务数据引用，不可删除"
+		}
+	}
+	return warehouses, total, nil
 }
 
 func (u *WarehouseUsecase) GetWarehouse(id uint64) (*domain.Warehouse, error) {
@@ -25,6 +47,9 @@ func (u *WarehouseUsecase) GetWarehouse(id uint64) (*domain.Warehouse, error) {
 }
 
 func (u *WarehouseUsecase) CreateWarehouse(ctx context.Context, params *domain.CreateWarehouseParams) (*domain.Warehouse, error) {
+	if !validation.IsValidCode(strings.TrimSpace(params.Code)) {
+		return nil, ErrWarehouseCodeInvalid
+	}
 	warehouse := &domain.Warehouse{
 		Code:          params.Code,
 		Name:          params.Name,
@@ -58,6 +83,9 @@ func (u *WarehouseUsecase) UpdateWarehouse(ctx context.Context, id uint64, param
 	}
 
 	if params.Code != nil {
+		if !validation.IsValidCode(strings.TrimSpace(*params.Code)) {
+			return nil, ErrWarehouseCodeInvalid
+		}
 		warehouse.Code = *params.Code
 	}
 	if params.Name != nil {
@@ -98,6 +126,13 @@ func (u *WarehouseUsecase) UpdateWarehouse(ctx context.Context, id uint64, param
 }
 
 func (u *WarehouseUsecase) DeleteWarehouse(ctx context.Context, id uint64) error {
+	refCount, err := u.repo.CountReferences(id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrWarehouseReferenced
+	}
 	return u.repo.Delete(ctx, id)
 }
 

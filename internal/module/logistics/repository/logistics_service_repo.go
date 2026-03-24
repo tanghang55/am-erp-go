@@ -100,3 +100,11 @@ func (r *LogisticsServiceRepository) GetServicesByTransportMode(transportMode do
 	}
 	return services, nil
 }
+
+func (r *LogisticsServiceRepository) CountReferences(id uint64) (int64, error) {
+	var total int64
+	if err := r.db.Raw("SELECT COUNT(1) FROM shipping_rate WHERE service_id = ?", id).Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}

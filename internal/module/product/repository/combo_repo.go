@@ -2,12 +2,17 @@ package repository
 
 import (
 	"am-erp-go/internal/module/product/domain"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
 type comboRepository struct {
 	db *gorm.DB
+}
+
+func qualifiedComboIDColumn() string {
+	return "product_combo.combo_id"
 }
 
 func NewProductComboRepository(db *gorm.DB) domain.ProductComboRepository {
@@ -21,29 +26,49 @@ func (r *comboRepository) ListComboIDs(params *domain.ComboListParams) ([]uint64
 	if params.Page <= 0 {
 		params.Page = 1
 	}
-	if params.PageSize <= 0 {
+	if params.PageSize == 0 {
 		params.PageSize = 20
 	}
 
+	query := r.db.Model(&domain.ProductComboItem{}).
+		Joins("JOIN product AS main_product ON main_product.id = product_combo.main_product_id")
+
+	if keyword := strings.TrimSpace(params.Keyword); keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where(
+			"main_product.seller_sku LIKE ? OR main_product.title LIKE ? OR CAST(product_combo.combo_id AS CHAR) LIKE ?",
+			like,
+			like,
+			like,
+		)
+	}
+
+	if marketplace := strings.TrimSpace(params.Marketplace); marketplace != "" {
+		query = query.Where("main_product.marketplace = ?", marketplace)
+	}
+	if len(params.Statuses) > 0 {
+		query = query.Where("main_product.status IN ?", params.Statuses)
+	}
+
 	var total int64
-	if err := r.db.Model(&domain.ProductComboItem{}).
-		Distinct("combo_id").
+	if err := query.
+		Distinct(qualifiedComboIDColumn()).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (params.Page - 1) * params.PageSize
-
 	var rows []struct {
 		ComboID uint64 `gorm:"column:combo_id"`
 	}
-	if err := r.db.Model(&domain.ProductComboItem{}).
-		Select("combo_id").
-		Group("combo_id").
-		Order("combo_id DESC").
-		Offset(offset).
-		Limit(params.PageSize).
-		Scan(&rows).Error; err != nil {
+	listQuery := query.
+		Select(qualifiedComboIDColumn()).
+		Group(qualifiedComboIDColumn()).
+		Order(qualifiedComboIDColumn() + " DESC")
+	if params.PageSize > 0 {
+		offset := (params.Page - 1) * params.PageSize
+		listQuery = listQuery.Offset(offset).Limit(params.PageSize)
+	}
+	if err := listQuery.Scan(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -63,21 +88,6 @@ func (r *comboRepository) GetItemsByComboID(comboID uint64) ([]domain.ProductCom
 		return nil, err
 	}
 	return items, nil
-}
-
-func (r *comboRepository) GetComboIDByMainProductID(mainProductID uint64) (uint64, error) {
-	var row struct {
-		ComboID uint64 `gorm:"column:combo_id"`
-	}
-	if err := r.db.Model(&domain.ProductComboItem{}).
-		Select("combo_id").
-		Where("main_product_id = ?", mainProductID).
-		Order("combo_id DESC").
-		Limit(1).
-		Scan(&row).Error; err != nil {
-		return 0, err
-	}
-	return row.ComboID, nil
 }
 
 func (r *comboRepository) CreateCombo(mainProductID uint64, productIDs []uint64, qtyRatios map[uint64]uint64) (uint64, error) {

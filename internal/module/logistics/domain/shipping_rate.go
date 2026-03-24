@@ -31,7 +31,7 @@ type ShippingRate struct {
 	ServiceID              *uint64       `json:"service_id" gorm:"column:service_id;index"`
 	PricingMethod          PricingMethod `json:"pricing_method" gorm:"column:pricing_method;type:enum('PER_KG','PER_CBM','PER_PACKAGE','FIXED');not null"`
 	BaseRate               float64       `json:"base_rate" gorm:"column:base_rate;type:decimal(10,2);not null"`
-	Currency               string        `json:"currency" gorm:"column:currency;size:10;default:CNY"`
+	Currency               string        `json:"currency" gorm:"column:currency;size:10"`
 	MinWeight              *float64      `json:"min_weight" gorm:"column:min_weight;type:decimal(10,2)"`
 	TransitDays            *int          `json:"transit_days" gorm:"column:transit_days"`
 	EffectiveDate          string        `json:"effective_date" gorm:"column:effective_date;type:date;not null"`
@@ -42,13 +42,16 @@ type ShippingRate struct {
 	UpdatedBy              *uint64       `json:"updated_by" gorm:"column:updated_by"`
 	GmtCreate              time.Time     `json:"created_at" gorm:"column:gmt_create"`
 	GmtModified            time.Time     `json:"updated_at" gorm:"column:gmt_modified"`
-	OtherFee               float64      `json:"other_fee" gorm:"column:other_fee;type:decimal(10,2);not null"`
+	OtherFee               float64       `json:"other_fee" gorm:"column:other_fee;type:decimal(10,2);not null"`
+	ReferenceCount         int64         `json:"reference_count" gorm:"-"`
+	Deletable              bool          `json:"deletable" gorm:"-"`
+	DeleteBlockReason      string        `json:"delete_block_reason,omitempty" gorm:"-"`
 
 	// Relations
-	Provider             *LogisticsProvider          `json:"provider,omitempty" gorm:"foreignKey:ProviderID"`
-	OriginWarehouse      *inventoryDomain.Warehouse  `json:"origin_warehouse,omitempty" gorm:"foreignKey:OriginWarehouseID"`
-	DestinationWarehouse *inventoryDomain.Warehouse  `json:"destination_warehouse,omitempty" gorm:"foreignKey:DestinationWarehouseID"`
-	Service              *LogisticsService           `json:"service,omitempty" gorm:"foreignKey:ServiceID"`
+	Provider             *LogisticsProvider         `json:"provider,omitempty" gorm:"foreignKey:ProviderID"`
+	OriginWarehouse      *inventoryDomain.Warehouse `json:"origin_warehouse,omitempty" gorm:"foreignKey:OriginWarehouseID"`
+	DestinationWarehouse *inventoryDomain.Warehouse `json:"destination_warehouse,omitempty" gorm:"foreignKey:DestinationWarehouseID"`
+	Service              *LogisticsService          `json:"service,omitempty" gorm:"foreignKey:ServiceID"`
 }
 
 func (ShippingRate) TableName() string {
@@ -83,7 +86,6 @@ type CreateShippingRateParams struct {
 	Remark                 *string       `json:"remark"`
 	OperatorID             *uint64       `json:"operator_id"`
 	OtherFee               float64       `json:"other_fee"`
-
 }
 
 type UpdateShippingRateParams struct {
@@ -102,8 +104,7 @@ type UpdateShippingRateParams struct {
 	Status                 *RateStatus    `json:"status"`
 	Remark                 *string        `json:"remark"`
 	OperatorID             *uint64        `json:"operator_id"`
-	OtherFee               float64       `json:"other_fee"`
-
+	OtherFee               float64        `json:"other_fee"`
 }
 
 // QueryLatestRateParams 查询最新报价的参数

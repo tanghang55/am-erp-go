@@ -43,12 +43,28 @@ func (s *stubProductRepo) UpdateImageUrl(id uint64, url string) error {
 	s.updatedUrl = url
 	return s.err
 }
+func (s *stubProductRepo) UpdateUnitCost(_ uint64, _ float64) error { return nil }
 func (s *stubProductRepo) GetDefaultSupplierID(_ uint64) (uint64, error) {
 	return 0, nil
 }
 func (s *stubProductRepo) UpdateDefaultSupplierID(_, _ uint64) error { return nil }
 func (s *stubProductRepo) ListByIDs(_ []uint64) ([]domain.Product, error) {
 	return nil, nil
+}
+func (s *stubProductRepo) ListByParentID(_ uint64) ([]domain.Product, error) {
+	return nil, nil
+}
+func (s *stubProductRepo) CountReferencesByIDs(_ []uint64) (map[uint64]int64, error) {
+	return map[uint64]int64{}, nil
+}
+func (s *stubProductRepo) CountByConfigReference(_ domain.ProductConfigType, _ uint64) (int64, error) {
+	return 0, nil
+}
+func (s *stubProductRepo) CountByCategoryID(_ uint64) (int64, error) {
+	return 0, nil
+}
+func (s *stubProductRepo) UpdateParentIDBatch(_ []uint64, _ *uint64) error {
+	return nil
 }
 func (s *stubProductRepo) UpdateComboInfo(_ uint64, _ uint64, _ []uint64) error {
 	return nil

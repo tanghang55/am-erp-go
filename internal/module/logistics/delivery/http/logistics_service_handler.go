@@ -73,6 +73,10 @@ func (h *LogisticsServiceHandler) CreateLogisticsService(c *gin.Context) {
 
 	service, err := h.usecase.Create(&params)
 	if err != nil {
+		if err == usecase.ErrServiceCodeInvalid || err == usecase.ErrServiceCodeDuplicate {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, err.Error())
 		return
 	}
@@ -95,6 +99,10 @@ func (h *LogisticsServiceHandler) UpdateLogisticsService(c *gin.Context) {
 	}
 
 	if err := h.usecase.Update(id, &params); err != nil {
+		if err == usecase.ErrServiceCodeInvalid || err == usecase.ErrServiceCodeDuplicate {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, err.Error())
 		return
 	}
@@ -111,6 +119,10 @@ func (h *LogisticsServiceHandler) DeleteLogisticsService(c *gin.Context) {
 	}
 
 	if err := h.usecase.Delete(id); err != nil {
+		if err == usecase.ErrServiceReferenced {
+			response.BadRequest(c, err.Error())
+			return
+		}
 		response.ServerError(c, err.Error())
 		return
 	}

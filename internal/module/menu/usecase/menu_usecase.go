@@ -1,11 +1,16 @@
 package usecase
 
 import (
+	"errors"
 	"strings"
 
+	"am-erp-go/internal/infrastructure/validation"
 	identitydomain "am-erp-go/internal/module/identity/domain"
 	menudomain "am-erp-go/internal/module/menu/domain"
 )
+
+var ErrMenuCodeInvalid = errors.New("menu code only supports letters, numbers, hyphen and underscore")
+var ErrMenuPermissionCodeInvalid = errors.New("permission code only supports letters, numbers, dot, hyphen and underscore")
 
 type MenuUsecase struct {
 	menuRepo menudomain.MenuRepository
@@ -37,6 +42,10 @@ func (uc *MenuUsecase) GetMenuTree(userID uint64) ([]*menudomain.MenuTree, error
 	if isAdmin {
 		menus, err = uc.menuRepo.GetAllMenus()
 	} else {
+		allMenus, allMenusErr := uc.menuRepo.GetAllMenus()
+		if allMenusErr != nil {
+			return nil, allMenusErr
+		}
 		permissions, err := uc.userRepo.GetUserPermissions(userID)
 		if err != nil {
 			return nil, err
@@ -49,6 +58,7 @@ func (uc *MenuUsecase) GetMenuTree(userID uint64) ([]*menudomain.MenuTree, error
 		if err != nil {
 			return nil, err
 		}
+		menus = appendMenuAncestors(menus, allMenus)
 	}
 	if err != nil {
 		return nil, err
@@ -91,10 +101,22 @@ func (uc *MenuUsecase) ListMenus(params *menudomain.MenuListParams) ([]menudomai
 }
 
 func (uc *MenuUsecase) CreateMenu(menu *menudomain.Menu) error {
+	if !validation.IsValidCode(strings.TrimSpace(menu.Code)) {
+		return ErrMenuCodeInvalid
+	}
+	if menu.PermissionCode != "" && !validation.IsValidPermissionCode(strings.TrimSpace(menu.PermissionCode)) {
+		return ErrMenuPermissionCodeInvalid
+	}
 	return uc.menuRepo.Create(menu)
 }
 
 func (uc *MenuUsecase) UpdateMenu(menu *menudomain.Menu) error {
+	if !validation.IsValidCode(strings.TrimSpace(menu.Code)) {
+		return ErrMenuCodeInvalid
+	}
+	if menu.PermissionCode != "" && !validation.IsValidPermissionCode(strings.TrimSpace(menu.PermissionCode)) {
+		return ErrMenuPermissionCodeInvalid
+	}
 	return uc.menuRepo.Update(menu)
 }
 
@@ -151,4 +173,38 @@ func buildFullPath(menu menudomain.Menu, idMap map[uint64]menudomain.Menu) strin
 		current = parent
 	}
 	return strings.Join(parts, " / ")
+}
+
+func appendMenuAncestors(menus []menudomain.Menu, allMenus []menudomain.Menu) []menudomain.Menu {
+	if len(menus) == 0 || len(allMenus) == 0 {
+		return menus
+	}
+
+	allMap := make(map[uint64]menudomain.Menu, len(allMenus))
+	for _, menu := range allMenus {
+		allMap[menu.ID] = menu
+	}
+
+	result := make([]menudomain.Menu, 0, len(menus))
+	exists := make(map[uint64]struct{}, len(menus))
+	for _, menu := range menus {
+		if _, ok := exists[menu.ID]; !ok {
+			result = append(result, menu)
+			exists[menu.ID] = struct{}{}
+		}
+		current := menu
+		for current.ParentID != nil {
+			parent, ok := allMap[*current.ParentID]
+			if !ok {
+				break
+			}
+			if _, ok := exists[parent.ID]; !ok {
+				result = append(result, parent)
+				exists[parent.ID] = struct{}{}
+			}
+			current = parent
+		}
+	}
+
+	return result
 }

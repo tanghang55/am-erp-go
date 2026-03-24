@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -8,15 +9,16 @@ import (
 )
 
 type stubSupplierRepo struct {
-	listParams *domain.SupplierListParams
-	listItems  []domain.Supplier
-	listTotal  int64
-	getID      uint64
-	getItem    *domain.Supplier
-	createItem *domain.Supplier
-	updateItem *domain.Supplier
-	deleteID   uint64
-	err        error
+	listParams     *domain.SupplierListParams
+	listItems      []domain.Supplier
+	listTotal      int64
+	getID          uint64
+	getItem        *domain.Supplier
+	createItem     *domain.Supplier
+	updateItem     *domain.Supplier
+	deleteID       uint64
+	referenceCount int64
+	err            error
 }
 
 func (s *stubSupplierRepo) List(params *domain.SupplierListParams) ([]domain.Supplier, int64, error) {
@@ -45,6 +47,10 @@ func (s *stubSupplierRepo) Update(supplier *domain.Supplier) error {
 func (s *stubSupplierRepo) Delete(id uint64) error {
 	s.deleteID = id
 	return s.err
+}
+
+func (s *stubSupplierRepo) CountReferences(_ uint64) (int64, error) {
+	return s.referenceCount, s.err
 }
 
 type stubSupplierTypeRepo struct {
@@ -186,6 +192,34 @@ func TestListSuppliersMapsTypes(t *testing.T) {
 	}
 }
 
+func TestListSuppliersIncludesDeleteState(t *testing.T) {
+	supplierRepo := &stubSupplierRepo{
+		listItems:      []domain.Supplier{{ID: 1, Name: "A"}},
+		listTotal:      1,
+		referenceCount: 2,
+	}
+	typeRepo := &stubSupplierTypeRepo{}
+
+	uc := NewSupplierUsecase(supplierRepo, typeRepo, nil, nil, nil)
+
+	items, _, err := uc.ListSuppliers(&domain.SupplierListParams{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one item")
+	}
+	if items[0].Deletable {
+		t.Fatalf("expected deletable false")
+	}
+	if items[0].ReferenceCount != 2 {
+		t.Fatalf("expected reference count 2, got %d", items[0].ReferenceCount)
+	}
+	if items[0].DeleteBlockReason == "" {
+		t.Fatalf("expected delete block reason")
+	}
+}
+
 func TestGetSupplierDetailAggregatesSubEntities(t *testing.T) {
 	supplierRepo := &stubSupplierRepo{
 		getItem: &domain.Supplier{ID: 7, Name: "Demo"},
@@ -211,7 +245,7 @@ func TestCreateSupplierReplacesTypes(t *testing.T) {
 	typeRepo := &stubSupplierTypeRepo{}
 
 	uc := NewSupplierUsecase(supplierRepo, typeRepo, nil, nil, nil)
-	supplier := &domain.Supplier{Name: "Demo"}
+	supplier := &domain.Supplier{SupplierCode: "SUP-001", Name: "Demo"}
 
 	created, err := uc.CreateSupplier(supplier, []string{"PRODUCT", "PACKAGING"})
 	if err != nil {
@@ -219,5 +253,53 @@ func TestCreateSupplierReplacesTypes(t *testing.T) {
 	}
 	if created == nil || created.ID == 0 || typeRepo.replaceID != created.ID || len(typeRepo.replace) != 2 {
 		t.Fatalf("expected types replaced")
+	}
+}
+
+func TestCreateSupplierRejectsInvalidCode(t *testing.T) {
+	supplierRepo := &stubSupplierRepo{}
+	typeRepo := &stubSupplierTypeRepo{}
+	uc := NewSupplierUsecase(supplierRepo, typeRepo, nil, nil, nil)
+
+	_, err := uc.CreateSupplier(&domain.Supplier{
+		SupplierCode: "供应商@001",
+		Name:         "Demo",
+	}, []string{"PRODUCT"})
+	if !errors.Is(err, ErrSupplierCodeInvalid) {
+		t.Fatalf("expected ErrSupplierCodeInvalid, got %v", err)
+	}
+	if supplierRepo.createItem != nil {
+		t.Fatalf("expected supplier create not called")
+	}
+}
+
+func TestUpdateSupplierRejectsInvalidCode(t *testing.T) {
+	supplierRepo := &stubSupplierRepo{}
+	typeRepo := &stubSupplierTypeRepo{}
+	uc := NewSupplierUsecase(supplierRepo, typeRepo, nil, nil, nil)
+
+	_, err := uc.UpdateSupplier(&domain.Supplier{
+		ID:           1,
+		SupplierCode: "INVALID#001",
+		Name:         "Demo",
+	}, []string{"PRODUCT"})
+	if !errors.Is(err, ErrSupplierCodeInvalid) {
+		t.Fatalf("expected ErrSupplierCodeInvalid, got %v", err)
+	}
+	if supplierRepo.updateItem != nil {
+		t.Fatalf("expected supplier update not called")
+	}
+}
+
+func TestDeleteSupplierRejectsReferencedSupplier(t *testing.T) {
+	supplierRepo := &stubSupplierRepo{referenceCount: 1}
+	uc := NewSupplierUsecase(supplierRepo, &stubSupplierTypeRepo{}, nil, nil, nil)
+
+	err := uc.DeleteSupplier(3)
+	if !errors.Is(err, ErrSupplierReferenced) {
+		t.Fatalf("expected ErrSupplierReferenced, got %v", err)
+	}
+	if supplierRepo.deleteID != 0 {
+		t.Fatalf("expected delete not called")
 	}
 }

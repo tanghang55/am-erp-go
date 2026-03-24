@@ -10,6 +10,10 @@ type quoteRepository struct {
 	db *gorm.DB
 }
 
+func productQuoteSelectClause() string {
+	return "product.id, product.seller_sku, product.asin, product.marketplace, product.title, product.image_url, product.supplier_id, product.gmt_modified AS gmt_modified"
+}
+
 func NewQuoteRepository(db *gorm.DB) domain.QuoteRepository {
 	return &quoteRepository{db: db}
 }
@@ -93,7 +97,7 @@ func (r *quoteRepository) ListProductsWithQuotes(params *domain.QuoteListParams)
 
 func (r *quoteRepository) buildProductQuoteQuery(params *domain.QuoteListParams) *gorm.DB {
 	query := r.db.Table("product").
-		Select("product.id, product.seller_sku, product.asin, product.marketplace, product.title, product.image_url, product.supplier_id,gmt_modified")
+		Select(productQuoteSelectClause())
 
 	if params.Keyword != "" {
 		keyword := "%" + params.Keyword + "%"
@@ -101,6 +105,12 @@ func (r *quoteRepository) buildProductQuoteQuery(params *domain.QuoteListParams)
 	}
 	if params.Marketplace != "" {
 		query = query.Where("product.marketplace = ?", params.Marketplace)
+	}
+	if params.ProductID != nil {
+		query = query.Where("product.id = ?", *params.ProductID)
+	}
+	if len(params.ProductIDs) > 0 {
+		query = query.Where("product.id IN ?", params.ProductIDs)
 	}
 	if params.SupplierID != nil {
 		query = query.Joins("JOIN product_supplier_quote psq ON psq.product_id = product.id AND psq.supplier_id = ?", *params.SupplierID).
@@ -113,6 +123,9 @@ func (r *quoteRepository) GetByProductSupplier(productID, supplierID uint64) (*d
 	var quote domain.ProductSupplierQuote
 	if err := r.db.Where("product_id = ? AND supplier_id = ?", productID, supplierID).
 		First(&quote).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, domain.ErrQuoteNotFound
+		}
 		return nil, err
 	}
 	return &quote, nil

@@ -78,3 +78,21 @@ func (r *LogisticsProviderRepository) List(params *domain.LogisticsProviderListP
 
 	return providers, total, nil
 }
+
+func (r *LogisticsProviderRepository) CountReferences(id uint64) (int64, error) {
+	var total int64
+	queries := []string{
+		"SELECT COUNT(1) FROM shipping_rate WHERE provider_id = ?",
+		"SELECT COUNT(1) FROM shipment WHERE logistics_provider_id = ?",
+	}
+
+	for _, query := range queries {
+		var count int64
+		if err := r.db.Raw(query, id).Scan(&count).Error; err != nil {
+			return 0, err
+		}
+		total += count
+	}
+
+	return total, nil
+}
